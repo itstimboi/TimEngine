@@ -10,10 +10,11 @@ g++ -I"../include/" -I"../Engine/" -L".//lib/" ^
 ../Engine/Light/*.cpp ^
 ../Engine/Mesh/*.cpp ^
 ../Engine/Map/*.cpp ^
+../Engine/Graphics/*.cpp ^
 ../Engine/Sprites/*.cpp ^
 ../Engine/Audio/*.cpp ^
 ../include/ImGUI/*.cpp ^
--lglfw3 -lgdi32 -lopengl32 -lopenal -luser32 -lkernel32 ^
+-lglfw3 -lglfw2 -lgdi32 -lopengl32 -lopenal -luser32 -lkernel32 ^
 -o ../Build/Engine.exe
 
 echo All Done
