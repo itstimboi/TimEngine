@@ -294,8 +294,7 @@ int main(int argc, char* argv[])
         ImGui::Begin(
             "Console",
             nullptr,
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoResize
+            ImGuiWindowFlags_NoMove
         );
 
         {

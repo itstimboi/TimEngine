@@ -21,14 +21,22 @@ enum class Renderer
     gl15,
     gl14,
     gl13,
-    // gl121,
     gl12,
     gl11,
-    gl10
+    gl10,
+
+    None
 };
+
+extern bool isUsingGL1;
 
 Renderer bestGLVersion();
 
-bool isUsingGL1 = false;
+bool InitGraphics(int width, int height, const char* title);
+void DeInitGraphics();
 
-bool madUnkVersionGL();
+Renderer GetRenderer();
+
+void SwapGraphicsBuffers();
+bool GraphicsShouldClose();
+void PollGraphicsEvents();

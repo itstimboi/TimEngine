@@ -1,7 +1,8 @@
 @REM set "EXTERNAL_INCLUDE=include/"
 @REM set "LIB_PATH=lib/"
 
-"../../../msys64/ucrt64/bin/g++.exe" -I"../include/" -L"../lib/" ^
+@REM "../../../msys64/ucrt64/bin/g++.exe"
+g++ -I"../include/" -L"../lib/" ^
 build.cpp ^
 ../include/ImGUI/*.cpp ^
 ../include/rlImGUI/*.cpp ^
