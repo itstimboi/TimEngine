@@ -19,32 +19,32 @@ Renderer GetRenderer()
 }
 
 
-Renderer bestGLVersion()
+GLRenderer bestGLVersion()
 {
     struct GLVersion
     {
         int major;
         int minor;
-        Renderer renderer;
+        GLRenderer renderer;
     };
 
     const GLVersion versions[] =
     {
-        {4, 6, Renderer::gl46},
-        {4, 5, Renderer::gl45},
-        {4, 4, Renderer::gl44},
-        {4, 3, Renderer::gl43},
-        {4, 2, Renderer::gl42},
-        {4, 1, Renderer::gl41},
-        {4, 0, Renderer::gl40},
+        {4, 6, GLRenderer::gl46},
+        {4, 5, GLRenderer::gl45},
+        {4, 4, GLRenderer::gl44},
+        {4, 3, GLRenderer::gl43},
+        {4, 2, GLRenderer::gl42},
+        {4, 1, GLRenderer::gl41},
+        {4, 0, GLRenderer::gl40},
 
-        {3, 3, Renderer::gl33},
-        {3, 2, Renderer::gl32},
-        {3, 1, Renderer::gl31},
-        {3, 0, Renderer::gl30},
+        {3, 3, GLRenderer::gl33},
+        {3, 2, GLRenderer::gl32},
+        {3, 1, GLRenderer::gl31},
+        {3, 0, GLRenderer::gl30},
 
-        {2, 1, Renderer::gl21},
-        {2, 0, Renderer::gl20}
+        {2, 1, GLRenderer::gl21},
+        {2, 0, GLRenderer::gl20}
     };
 
     if (!glfwInit())
@@ -61,7 +61,7 @@ Renderer bestGLVersion()
         }
 #endif
 
-        return Renderer::None;
+        return GLRenderer::None;
     }
 
     for (const auto& version : versions)
@@ -143,40 +143,98 @@ Renderer bestGLVersion()
     }
 #endif
 
-    return Renderer::None;
+    return GLRenderer::None;
 }
 
 
 static const char* RendererName(Renderer renderer)
 {
-    switch (renderer)
+    if (renderer == Renderer::GL)
+    {    
+        switch (renderer)
+        {
+            case GLRenderer::gl46: return "OpenGL 4.6";
+            case GLRenderer::gl45: return "OpenGL 4.5";
+            case GLRenderer::gl44: return "OpenGL 4.4";
+            case GLRenderer::gl43: return "OpenGL 4.3";
+            case GLRenderer::gl42: return "OpenGL 4.2";
+            case GLRenderer::gl41: return "OpenGL 4.1";
+            case GLRenderer::gl40: return "OpenGL 4.0";
+
+            case GLRenderer::gl33: return "OpenGL 3.3";
+            case GLRenderer::gl32: return "OpenGL 3.2";
+            case GLRenderer::gl31: return "OpenGL 3.1";
+            case GLRenderer::gl30: return "OpenGL 3.0";
+
+            case GLRenderer::gl21: return "OpenGL 2.1";
+            case GLRenderer::gl20: return "OpenGL 2.0";
+
+            case GLRenderer::gl15: return "OpenGL 1.5";
+            case GLRenderer::gl14: return "OpenGL 1.4";
+            case GLRenderer::gl13: return "OpenGL 1.3";
+            case GLRenderer::gl12: return "OpenGL 1.2";
+            case GLRenderer::gl11: return "OpenGL 1.1";
+            case GLRenderer::gl10: return "OpenGL 1.0";
+
+            case GLRenderer::None:
+            default:
+                return "None";
+        }
+    }
+    else if (renderer == Renderer::DX)
     {
-        case Renderer::gl46: return "OpenGL 4.6";
-        case Renderer::gl45: return "OpenGL 4.5";
-        case Renderer::gl44: return "OpenGL 4.4";
-        case Renderer::gl43: return "OpenGL 4.3";
-        case Renderer::gl42: return "OpenGL 4.2";
-        case Renderer::gl41: return "OpenGL 4.1";
-        case Renderer::gl40: return "OpenGL 4.0";
+        switch (renderer)
+        {
+            case DXRenderer::dx120: return "DirectX 12.0";
 
-        case Renderer::gl33: return "OpenGL 3.3";
-        case Renderer::gl32: return "OpenGL 3.2";
-        case Renderer::gl31: return "OpenGL 3.1";
-        case Renderer::gl30: return "OpenGL 3.0";
+            case DXRenderer::dx110: return "DirectX 11.0";
 
-        case Renderer::gl21: return "OpenGL 2.1";
-        case Renderer::gl20: return "OpenGL 2.0";
+            case DXRenderer::dx100: return "DirectX 10.0";
 
-        case Renderer::gl15: return "OpenGL 1.5";
-        case Renderer::gl14: return "OpenGL 1.4";
-        case Renderer::gl13: return "OpenGL 1.3";
-        case Renderer::gl12: return "OpenGL 1.2";
-        case Renderer::gl11: return "OpenGL 1.1";
-        case Renderer::gl10: return "OpenGL 1.0";
+            case DXRenderer::dx90c: return "DirectX 9.0c";
+            case DXRenderer::dx90b: return "DirectX 9.0b";
+            case DXRenderer::dx90a: return "DirectX 9.0a";
+            case DXRenderer::dx90: return "DirectX 9.0";
 
-        case Renderer::None:
-        default:
-            return "None";
+            case DXRenderer::dx81b: return "DirectX 8.1b";
+            case DXRenderer::dx81: return "DirectX 8.1";
+            case DXRenderer::dx80: return "DirectX 8.0";
+
+            case DXRenderer::dx70a: return "DirectX 7.0a";
+            case DXRenderer::dx70: return "DirectX 7.0";
+            
+            case DXRenderer::dx61: return "DirectX 6.1";
+            case DXRenderer::dx60: return "DirectX 6.0";
+            
+            case DXRenderer::dx52a: return "DirectX 5.2a";
+            case DXRenderer::dx52: return "DirectX 5.2";
+            case DXRenderer::dx51: return "DirectX 5.1";
+            case DXRenderer::dx50: return "DirectX 5.0";
+
+            case DXRenderer::dx30a: return "DirectX 3.0a";
+            case DXRenderer::dx30: return "DirectX 3.0";
+
+            case DXRenderer::dx20: return "DirectX 2.0";
+
+            case DXRenderer::dx10: return "DirectX 1.0";
+
+            case DXRenderer::None:
+            default:
+                return "None";
+        }
+    }
+    else if (renderer == Renderer::VK)
+    {
+        switch (renderer)
+        {
+            case VKRenderer::vk14: return "Vulkan 1.4";
+
+            case VKRenderer::vk13: return "Vulkan 1.3";
+
+            case VKRenderer::None:
+            default:
+                return "None";
+        }
     }
 }
 

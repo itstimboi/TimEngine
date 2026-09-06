@@ -1,0 +1,7 @@
+planning for dll stuff,
+
+the engine is separate dll, which
+
+a .cpp to .exe uses, 
+
+the .exe will use a .a/.lib file

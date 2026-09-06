@@ -11,7 +11,7 @@ Texture::Texture(const char* image, const char* texType, GLenum slot)
     unsigned char* bytes = stbi_load(image, &widthImg, &heightImg, &numColCh, 0);
 
     glGenTextures(1, &ID);
-    glActiveTexture(GL_TEXTURE_2D);
+    glActiveTexture(slot);
     glBindTexture(GL_TEXTURE_2D, ID);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
