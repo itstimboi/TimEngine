@@ -1,19 +1,11 @@
 #include "Graphics.h"
 
-#include "glfw3stuff.h"
+#include "glfwstuff.h"
 
 #include <iostream>
 #include <string>
 #include <vector>
 #include <cstdio>
-
-#ifdef _WIN32
-
-    #include <windows.h>
-
-    #include "windowsversion.h"
-
-#endif
 
 namespace TE
 {
@@ -35,50 +27,7 @@ namespace TE
 
 	GLFWBackend ConfigureGLFW()
 	{
-
-		TE::WindowsVersion windows = TE::GetWindowsVersion();
-
-		switch (windows)
-		{
-			case TE::WindowsVersion::Windows11:
-			case TE::WindowsVersion::Windows10:
-			case TE::WindowsVersion::Windows81:
-			case TE::WindowsVersion::Windows8:
-			{
-				// Modern GLFW
-				printf("Modern GLFW configuration\n");
-
-				return GLFWBackend::GLFW3;
-				
-				break;
-			}
-
-			case TE::WindowsVersion::Windows7:
-			case TE::WindowsVersion::WindowsVista:
-			case TE::WindowsVersion::WindowsXP:
-			case TE::WindowsVersion::Windows2000:
-			case TE::WindowsVersion::WindowsME:
-			case TE::WindowsVersion::Windows98:
-			case TE::WindowsVersion::Windows95:
-			{
-				// Older GLFW configuration
-				printf("Legacy GLFW configuration\n");
-
-                return GLFWBackend::GLFW2;
-
-				break;
-			}
-
-			default:
-			{
-				printf("Unsupported Windows version\n");
-
-                return GLFWBackend::None;
-
-				break;
-			}
-		}
-
+		return GetGLFWBackend();
 	}
 
 static bool InitializeGLFW()
