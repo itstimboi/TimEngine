@@ -48,7 +48,7 @@ namespace TE
 				// Modern GLFW
 				printf("Modern GLFW configuration\n");
 
-				
+				return GLFWBackend::GLFW3;
 				
 				break;
 			}
@@ -63,12 +63,18 @@ namespace TE
 			{
 				// Older GLFW configuration
 				printf("Legacy GLFW configuration\n");
+
+                return GLFWBackend::GLFW2;
+
 				break;
 			}
 
 			default:
 			{
 				printf("Unsupported Windows version\n");
+
+                return GLFWBackend::None;
+
 				break;
 			}
 		}
@@ -80,9 +86,9 @@ static bool InitializeGLFW()
     if (glfwInitialized)
         return true;
 
-    glfwInitialized = ;
+    glfwInitialized = InitializeGLFWBackend();
 
-    return true;
+    return InitializeGLFWBackend();
 }
 
 // ============================================================
@@ -441,8 +447,8 @@ static GLRenderer DetectLegacyOpenGL()
         return GLRenderer::None;
     }
 
-    const GLubyte* versionString =
-        glGetString(GL_VERSION);
+    const char* versionString =
+        GetGLVersionString();
 
     if (!versionString)
     {
@@ -874,14 +880,12 @@ static bool InitOpenGLWindow(
     window->renderer.VK =
         VKRenderer::None;
 
-    glfwMakeContextCurrent(
+    MakeGLFWContextCurrent(
         handle
     );
 
     const char* actualVersion =
-        reinterpret_cast<const char*>(
-            glGetString(GL_VERSION)
-        );
+        GetGLVersionString();
 
     std::cout
         << "Created "
@@ -1179,12 +1183,12 @@ void DestroyGraphicsWindow(
     {
         if (currentWindow == window)
         {
-            glfwMakeContextCurrent(
+            MakeGLFWContextCurrent(
                 nullptr
             );
         }
 
-        glfwDestroyWindow(
+        DestroyGLFWWindow(
             window->handle
         );
 
@@ -1296,7 +1300,7 @@ void GraphicsMakeCurrent(
     }
     else if (window->handle)
     {
-        glfwMakeContextCurrent(
+        MakeGLFWContextCurrent(
             window->handle
         );
     }
@@ -1430,7 +1434,7 @@ void GraphicsSwapBuffers(
         }
         else if (window->handle)
         {
-            glfwSwapBuffers(
+            SwapGLFWBuffers(
                 window->handle
             );
         }
@@ -1472,7 +1476,7 @@ bool GraphicsWindowShouldClose(
 
     if (window->handle)
     {
-        return glfwWindowShouldClose(
+        return GLFWWindowShouldClose(
             window->handle
         );
     }
@@ -1490,7 +1494,7 @@ void GraphicsPollEvents()
     if (!glfwInitialized)
         return;
 
-    glfwPollEvents();
+    PollGLFWEvents();
 }
 
 
@@ -1512,7 +1516,7 @@ void DeInitGraphics()
 
     if (glfwInitialized)
     {
-        glfwTerminate();
+        ShutdownGLFWBackend();
 
         glfwInitialized =
             false;

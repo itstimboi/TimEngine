@@ -8,8 +8,6 @@
 
 #endif
 
-#include <GLFW/glfw3.h>
-
 namespace TE
 {
 
@@ -146,7 +144,7 @@ void ShutdownGLFWBackend()
 
     if (GetGLFWBackend() == GLFWBackend::GLFW2)
     {
-        glfwTerminate();
+        glfw2Terminate();
         return;
     }
 
@@ -196,12 +194,12 @@ bool SetGLFWOpenGLVersion(
 
     if (GetGLFWBackend() == GLFWBackend::GLFW2)
     {
-        glfwOpenWindowHint(
+        glfw2OpenWindowHint(
             GLFW_OPENGL_VERSION_MAJOR,
             major
         );
 
-        glfwOpenWindowHint(
+        glfw2OpenWindowHint(
             GLFW_OPENGL_VERSION_MINOR,
             minor
         );

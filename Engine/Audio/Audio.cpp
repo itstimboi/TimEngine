@@ -23,6 +23,7 @@ namespace
         std::unique_ptr<ma_sound> sound;
 
         float volume = 1.0f;
+		float panning = 0.0f;
     };
 
 
@@ -30,16 +31,18 @@ namespace
 
     bool g_Initialized = false;
 
-    SoundHandle g_NextSoundHandle = 1;
+    TE::Audio::SoundHandle g_NextSoundHandle = 1;
 
-    std::unordered_map<SoundHandle, CachedSound> g_Sounds;
+    std::unordered_map<TE::Audio::SoundHandle, CachedSound> g_Sounds;
 
     std::mutex g_AudioMutex;
 }
 
 namespace TE
+{
 
 	namespace Audio
+	{
 
 		// =========================================================
 		// Init
@@ -119,425 +122,304 @@ namespace TE
 				<< "Audio shut down.\n";
 		}
 		
-// =========================================================
-// Pre_CacheSound
-// =========================================================
-
-// SoundHandle Audio::Pre_CacheSound(
-//     const std::string& path
-// )
-// {
-//     if (!g_Initialized)
-//     {
-//         std::cerr
-//             << "Audio: Audio system is not initialized.\n";
-
-//         return 0;
-//     }
-
-//     if (!std::filesystem::exists(path))
-//     {
-//         std::cerr
-//             << "Audio: File does not exist: "
-//             << path
-//             << "\n";
-
-//         std::cerr
-//             << "Audio: Working directory: "
-//             << std::filesystem::current_path()
-//             << "\n";
-
-//         return 0;
-//     }
-//     if (!g_Initialized)
-//     {
-//         std::cerr
-//             << "Audio: Audio system is not initialized.\n";
-
-//         return 0;
-//     }
-
-
-//     std::lock_guard<std::mutex> lock(g_AudioMutex);
-
-
-//     // -----------------------------------------------------
-//     // Check if the sound is already loaded
-//     // -----------------------------------------------------
-
-//     for (const auto& pair : g_Sounds)
-//     {
-//         if (pair.second.path == path)
-//         {
-//             return pair.first;
-//         }
-//     }
-
-
-//     // -----------------------------------------------------
-//     // Allocate sound
-//     // -----------------------------------------------------
-
-//     auto sound = std::make_unique<ma_sound>();
-
-
-//     // -----------------------------------------------------
-//     // Initialize sound from file
-//     // -----------------------------------------------------
-
-//     ma_result result = ma_sound_init_from_file(
-//         &g_Engine,
-//         path.c_str(),
-
-//         MA_SOUND_FLAG_DECODE,
-
-//         nullptr,
-//         nullptr,
-
-//         sound.get()
-//     );
-
-
-//     if (result != MA_SUCCESS)
-//     {
-//         std::cerr
-//             << "Audio: Failed to load sound: "
-//             << path
-//             << "\n";
-
-//         return 0;
-//     }
-
-
-//     // -----------------------------------------------------
-//     // Create handle
-//     // -----------------------------------------------------
-
-//     SoundHandle handle = g_NextSoundHandle++;
-
-
-//     CachedSound cachedSound;
-
-//     cachedSound.path = path;
-//     cachedSound.sound = std::move(sound);
-//     cachedSound.volume = 1.0f;
-
-
-//     g_Sounds.emplace(
-//         handle,
-//         std::move(cachedSound)
-//     );
-
-
-//     std::cout
-//         << "Audio: Precached \""
-//         << path
-//         << "\" as sound "
-//         << handle
-//         << "\n";
-
-
-//     return handle;
-// }
-
-	SoundHandle Audio::Pre_CacheSound(const std::string& path)
-	{
-		if (!g_Initialized)
+		SoundHandle Audio::Pre_CacheSound(const std::string& path)
 		{
-			std::cerr
-				<< "Audio: Audio system is not initialized.\n";
-
-			return 0;
-		}
-
-		// Check the path first
-		if (!std::filesystem::exists(path))
-		{
-			std::cerr
-				<< "Audio: File does not exist:\n"
-				<< "  " << path << "\n";
-
-			std::cerr
-				<< "Audio: Current working directory:\n"
-				<< "  " << std::filesystem::current_path() << "\n";
-
-			return 0;
-		}
-
-		std::cout
-			<< "Audio: Loading:\n"
-			<< "  " << std::filesystem::absolute(path)
-			<< "\n";
-
-
-		std::lock_guard<std::mutex> lock(g_AudioMutex);
-
-
-		// Check if already cached
-		for (const auto& pair : g_Sounds)
-		{
-			if (pair.second.path == path)
+			if (!g_Initialized)
 			{
-				return pair.first;
+				std::cerr
+					<< "Audio: Audio system is not initialized.\n";
+
+				return 0;
+			}
+
+			// Check the path first
+			if (!std::filesystem::exists(path))
+			{
+				std::cerr
+					<< "Audio: File does not exist:\n"
+					<< "  " << path << "\n";
+
+				std::cerr
+					<< "Audio: Current working directory:\n"
+					<< "  " << std::filesystem::current_path() << "\n";
+
+				return 0;
+			}
+
+			std::cout
+				<< "Audio: Loading:\n"
+				<< "  " << std::filesystem::absolute(path)
+				<< "\n";
+
+
+			std::lock_guard<std::mutex> lock(g_AudioMutex);
+
+
+			// Check if already cached
+			for (const auto& pair : g_Sounds)
+			{
+				if (pair.second.path == path)
+				{
+					return pair.first;
+				}
+			}
+
+
+			auto sound = std::make_unique<ma_sound>();
+
+
+			ma_result result = ma_sound_init_from_file(
+				&g_Engine,
+				path.c_str(),
+				MA_SOUND_FLAG_DECODE,
+				nullptr,
+				nullptr,
+				sound.get()
+			);
+
+
+			if (result != MA_SUCCESS)
+			{
+				std::cerr
+					<< "Audio: miniaudio failed to load:\n"
+					<< "  " << path << "\n"
+					<< "  Error code: " << result << "\n"
+					<< "  Error: " << ma_result_description(result)
+					<< "\n";
+
+				return 0;
+			}
+
+
+			SoundHandle handle = g_NextSoundHandle++;
+
+
+			CachedSound cachedSound;
+
+			cachedSound.path = path;
+			cachedSound.sound = std::move(sound);
+			cachedSound.volume = 1.0f;
+
+
+			g_Sounds.emplace(
+				handle,
+				std::move(cachedSound)
+			);
+
+
+			std::cout
+				<< "Audio: Precached \""
+				<< path
+				<< "\" as sound "
+				<< handle
+				<< "\n";
+
+
+			return handle;
+		}
+
+		// =========================================================
+		// PlaySound
+		// =========================================================
+
+		void Audio::PlaySound(
+			SoundHandle sound,
+			bool loop
+		)
+		{
+			if (!g_Initialized)
+				return;
+
+
+			std::lock_guard<std::mutex> lock(g_AudioMutex);
+
+
+			auto it = g_Sounds.find(sound);
+
+
+			if (it == g_Sounds.end())
+			{
+				std::cerr
+					<< "Audio: Invalid sound handle: "
+					<< sound
+					<< "\n";
+
+				return;
+			}
+
+
+			CachedSound& cachedSound = it->second;
+
+
+			ma_sound* audio = cachedSound.sound.get();
+
+
+			// -----------------------------------------------------
+			// Set looping
+			// -----------------------------------------------------
+
+			ma_sound_set_looping(
+				audio,
+				loop
+			);
+
+
+			// -----------------------------------------------------
+			// Reset to beginning
+			// -----------------------------------------------------
+
+			ma_sound_seek_to_pcm_frame(
+				audio,
+				0
+			);
+
+
+			// -----------------------------------------------------
+			// Apply volume
+			// -----------------------------------------------------
+
+			ma_sound_set_volume(
+				audio,
+				cachedSound.volume
+			);
+
+
+			// -----------------------------------------------------
+			// Play
+			// -----------------------------------------------------
+
+			ma_result result = ma_sound_start(audio);
+
+
+			if (result != MA_SUCCESS)
+			{
+				std::cerr
+					<< "Audio: Failed to play sound "
+					<< sound
+					<< "\n";
 			}
 		}
 
 
-		auto sound = std::make_unique<ma_sound>();
+		// =========================================================
+		// StopSound
+		// =========================================================
 
-
-		ma_result result = ma_sound_init_from_file(
-			&g_Engine,
-			path.c_str(),
-			MA_SOUND_FLAG_DECODE,
-			nullptr,
-			nullptr,
-			sound.get()
-		);
-
-
-		if (result != MA_SUCCESS)
+		void Audio::StopSound(
+			SoundHandle sound
+		)
 		{
-			std::cerr
-				<< "Audio: miniaudio failed to load:\n"
-				<< "  " << path << "\n"
-				<< "  Error code: " << result << "\n"
-				<< "  Error: " << ma_result_description(result)
-				<< "\n";
+			if (!g_Initialized)
+				return;
 
-			return 0;
+
+			std::lock_guard<std::mutex> lock(g_AudioMutex);
+
+
+			auto it = g_Sounds.find(sound);
+
+
+			if (it == g_Sounds.end())
+				return;
+
+
+			CachedSound& cachedSound = it->second;
+
+
+			ma_sound_stop(
+				cachedSound.sound.get()
+			);
+
+
+			// Reset position so the next PlaySound starts
+			// from the beginning.
+
+			ma_sound_seek_to_pcm_frame(
+				cachedSound.sound.get(),
+				0
+			);
 		}
 
 
-		SoundHandle handle = g_NextSoundHandle++;
+		// =========================================================
+		// SetVolume
+		// =========================================================
 
-
-		CachedSound cachedSound;
-
-		cachedSound.path = path;
-		cachedSound.sound = std::move(sound);
-		cachedSound.volume = 1.0f;
-
-
-		g_Sounds.emplace(
-			handle,
-			std::move(cachedSound)
-		);
-
-
-		std::cout
-			<< "Audio: Precached \""
-			<< path
-			<< "\" as sound "
-			<< handle
-			<< "\n";
-
-
-		return handle;
-	}
-
-	// =========================================================
-	// PlaySound
-	// =========================================================
-
-	void Audio::PlaySound(
-		SoundHandle sound,
-		bool loop
-	)
-	{
-		if (!g_Initialized)
-			return;
-
-
-		std::lock_guard<std::mutex> lock(g_AudioMutex);
-
-
-		auto it = g_Sounds.find(sound);
-
-
-		if (it == g_Sounds.end())
+		void Audio::SetVolume(
+			SoundHandle sound,
+			float volume
+		)
 		{
-			std::cerr
-				<< "Audio: Invalid sound handle: "
-				<< sound
-				<< "\n";
+			if (!g_Initialized)
+				return;
 
-			return;
+
+			std::lock_guard<std::mutex> lock(g_AudioMutex);
+
+
+			auto it = g_Sounds.find(sound);
+
+
+			if (it == g_Sounds.end())
+				return;
+
+
+			CachedSound& cachedSound = it->second;
+
+
+			// Clamp volume
+
+			if (volume < 0.0f)
+				volume = 0.0f;
+
+			if (volume > 1.0f)
+				volume = 1.0f;
+
+
+			cachedSound.volume = volume;
+
+
+			ma_sound_set_volume(
+				cachedSound.sound.get(),
+				volume
+			);
 		}
-
-
-		CachedSound& cachedSound = it->second;
-
-
-		ma_sound* audio = cachedSound.sound.get();
-
-
-		// -----------------------------------------------------
-		// Set looping
-		// -----------------------------------------------------
-
-		ma_sound_set_looping(
-			audio,
-			loop
-		);
-
-
-		// -----------------------------------------------------
-		// Reset to beginning
-		// -----------------------------------------------------
-
-		ma_sound_seek_to_pcm_frame(
-			audio,
-			0
-		);
-
-
-		// -----------------------------------------------------
-		// Apply volume
-		// -----------------------------------------------------
-
-		ma_sound_set_volume(
-			audio,
-			cachedSound.volume
-		);
-
-
-		// -----------------------------------------------------
-		// Play
-		// -----------------------------------------------------
-
-		ma_result result = ma_sound_start(audio);
-
-
-		if (result != MA_SUCCESS)
-		{
-			std::cerr
-				<< "Audio: Failed to play sound "
-				<< sound
-				<< "\n";
-		}
-	}
-
-
-	// =========================================================
-	// StopSound
-	// =========================================================
-
-	void Audio::StopSound(
-		SoundHandle sound
-	)
-	{
-		if (!g_Initialized)
-			return;
-
-
-		std::lock_guard<std::mutex> lock(g_AudioMutex);
-
-
-		auto it = g_Sounds.find(sound);
-
-
-		if (it == g_Sounds.end())
-			return;
-
-
-		CachedSound& cachedSound = it->second;
-
-
-		ma_sound_stop(
-			cachedSound.sound.get()
-		);
-
-
-		// Reset position so the next PlaySound starts
-		// from the beginning.
-
-		ma_sound_seek_to_pcm_frame(
-			cachedSound.sound.get(),
-			0
-		);
-	}
-
-
-	// =========================================================
-	// SetVolume
-	// =========================================================
-
-	void Audio::SetVolume(
-		SoundHandle sound,
-		float volume
-	)
-	{
-		if (!g_Initialized)
-			return;
-
-
-		std::lock_guard<std::mutex> lock(g_AudioMutex);
-
-
-		auto it = g_Sounds.find(sound);
-
-
-		if (it == g_Sounds.end())
-			return;
-
-
-		CachedSound& cachedSound = it->second;
-
-
-		// Clamp volume
-
-		if (volume < 0.0f)
-			volume = 0.0f;
-
-		if (volume > 1.0f)
-			volume = 1.0f;
-
-
-		cachedSound.volume = volume;
-
-
-		ma_sound_set_volume(
-			cachedSound.sound.get(),
-			volume
-		);
-	}
-	
-	void Audio::SetPanning(SoundHandle sound, float panning)
-	{
-		if (!g_Initialized)
-			return;
 		
-		std::lock_guard<std::mutex> lock(g_AudioMutex);
+		void Audio::SetPanning(SoundHandle sound, float panning)
+		{
+			if (!g_Initialized)
+				return;
+			
+			std::lock_guard<std::mutex> lock(g_AudioMutex);
 
 
-		auto it = g_Sounds.find(sound);
+			auto it = g_Sounds.find(sound);
 
 
-		if (it == g_Sounds.end())
-			return;
+			if (it == g_Sounds.end())
+				return;
 
 
-		CachedSound& cachedSound = it->second;
+			CachedSound& cachedSound = it->second;
 
 
-		// Clamp panning
+			// Clamp panning
 
-		if (panning < -1.0f)
-			panning = -1.0f;
+			if (panning < -1.0f)
+				panning = -1.0f;
 
-		if (panning > 1.0f)
-			panning = 1.0f;
-
-
-		cachedSound.panning = panning;
+			if (panning > 1.0f)
+				panning = 1.0f;
 
 
-		ma_sound_set_pan(
-			cachedSound.sound.get(),
-			panning
-		);
-	}
+			cachedSound.panning = panning;
+
+
+			ma_sound_set_pan(
+				cachedSound.sound.get(),
+				panning
+			);
+		}
 
 	}
 }

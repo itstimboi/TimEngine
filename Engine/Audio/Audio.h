@@ -48,6 +48,6 @@ namespace TE
 		void StopSound(SoundHandle sound);
 
 		void SetVolume(SoundHandle sound, float volume);
-		void SetPanning(SoundHandle sound, float panning)
+		void SetPanning(SoundHandle sound, float panning);
 	}
 }
