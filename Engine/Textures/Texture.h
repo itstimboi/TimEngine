@@ -5,17 +5,22 @@
 
 #include "Rendering/shaderClass.h"
 
-class Texture
+namespace TE
 {
-    public:
-        GLuint ID;
-        const char* type;
-        GLuint unit;
-        
-        Texture(const char* image, const char* texType, GLenum slot);
 
-        void texUnit(Shader &shader, const char* uniform, GLuint unit);
-        void Bind();
-        void UnBind();
-        void Delete();
+	class Texture
+	{
+		public:
+			unsigned int ID;
+			const char* type;
+			unsigned int unit;
+			
+			Texture(const char* image, const char* texType, GLenum slot);
+
+			void texUnit(TE::Shader &shader, const char* uniform, unsigned int unit);
+			void Bind();
+			void UnBind();
+			void Delete();
+	};
+
 };

@@ -15,7 +15,7 @@ g++ -I"../include/" -I"../Engine/" -L".//lib/" ^
 ../Engine/Sprites/*.cpp ^
 ../Engine/Audio/*.cpp ^
 ../include/ImGUI/*.cpp ^
--lglfw3 -lgdi32 -lopengl32 -lopenal -luser32 -lkernel32 ^
+-lglfw_combined -lgdi32 -lopengl32 -luser32 -lkernel32 ^
 -o ../Build/Engine.exe
 
 echo All Done

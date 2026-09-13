@@ -31,17 +31,23 @@
 #include <cstdint>
 #include <string>
 
-using SoundHandle = uint32_t;
-
-namespace Audio
+namespace TE
 {
-    bool Init();
-    void Shutdown();
 
-    SoundHandle Pre_CacheSound(const std::string& path);
+	namespace Audio
+	{
+		
+		using SoundHandle = uint32_t;
+		
+		bool Init();
+		void Shutdown();
 
-    void PlaySound(SoundHandle sound, bool loop = false);
-    void StopSound(SoundHandle sound);
+		SoundHandle Pre_CacheSound(const std::string& path);
 
-    void SetVolume(SoundHandle sound, float volume);
+		void PlaySound(SoundHandle sound, bool loop = false);
+		void StopSound(SoundHandle sound);
+
+		void SetVolume(SoundHandle sound, float volume);
+		void SetPanning(SoundHandle sound, float panning)
+	}
 }

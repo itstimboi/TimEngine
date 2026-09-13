@@ -1,3 +1,5 @@
+#if _WIN32
+
 #include <windows.h>
 
 #include "messageBox.h"
@@ -24,7 +26,7 @@ bool CreateMessageBox(std::string info, std::string title, int flags, int icon)
         if(icon == 0)
         {
 
-            if (!MessageBox(NULL, string_to_wstring(info).c_str(), string_to_wstring(title).c_str(), MB_OK))
+            if (!MessageBoxW(NULL, string_to_wstring(info).c_str(), string_to_wstring(title).c_str(), MB_OK))
             {
                 return false;
             }
@@ -33,7 +35,7 @@ bool CreateMessageBox(std::string info, std::string title, int flags, int icon)
         else if(icon == 1)
         {
 
-            if (!MessageBox(NULL, string_to_wstring(info).c_str(), string_to_wstring(title).c_str(), MB_OK | MB_ICONWARNING))
+            if (!MessageBoxW(NULL, string_to_wstring(info).c_str(), string_to_wstring(title).c_str(), MB_OK | MB_ICONWARNING))
             {
                 return false;
             }
@@ -44,3 +46,5 @@ bool CreateMessageBox(std::string info, std::string title, int flags, int icon)
 
     return true;
 }
+
+#endif

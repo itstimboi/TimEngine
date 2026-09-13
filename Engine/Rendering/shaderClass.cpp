@@ -1,144 +1,357 @@
 #include "shaderClass.h"
 
-// std::string get_file_contents(const char* filename)
-// {
-//     std::cout << "errno = " << errno << '\n';
-//     std::cout << std::strerror(errno) << '\n';
+#include "OpenGLShader.h"
+#include "Graphics/Graphics.h"
 
-//     std::ifstream in(filename, std::ios::binary);
-//     if (in)
-//     {
-//         std::string contents;
-//         in.seekg(0, std::ios::end);
-//         contents.resize(in.tellg());
-//         in.seekg(0, std::ios::beg);
-//         in.read(&contents[0], contents.size());
-//         in.close();
-//         return (contents);
-//     }
-//     throw(errno);
-// }
+#include <utility>
+#include <stdexcept>
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <cerrno>
+#include <cstring>
+#include <stdexcept>
 
-std::string get_file_contents(const char* filename)
+namespace TE
 {
-    errno = 0; // optional, clears any previous error
 
-    std::ifstream in(filename, std::ios::binary);
-
-    if (!in.is_open())
+    struct Shader::Backend
     {
-        std::cerr << "Failed to open: " << filename << '\n';
-        std::cerr << "errno = " << errno << '\n';
-        std::cerr << "message = " << std::strerror(errno) << '\n';
+        OpenGLShader* OpenGL = nullptr;
+    };
 
-        throw std::runtime_error(std::string("Failed to open file: ") + filename);
+
+    std::string get_file_contents(
+        const char* filename
+    )
+    {
+        errno = 0;
+
+        std::ifstream in(
+            filename,
+            std::ios::binary
+        );
+
+        if (!in.is_open())
+        {
+            std::cerr
+                << "Failed to open shader: "
+                << filename
+                << '\n';
+
+            std::cerr
+                << "errno = "
+                << errno
+                << '\n';
+
+            std::cerr
+                << "message = "
+                << std::strerror(errno)
+                << '\n';
+
+            throw std::runtime_error(
+                std::string("Failed to open file: ")
+                + filename
+            );
+        }
+
+        std::ostringstream contents;
+
+        contents << in.rdbuf();
+
+        return contents.str();
     }
 
-    std::string contents;
-    in.seekg(0, std::ios::end);
-    contents.resize(static_cast<size_t>(in.tellg()));
-    in.seekg(0, std::ios::beg);
-    in.read(contents.data(), contents.size());
 
-    return contents;
-}
+    Shader::Shader(
+        GraphicsWindow* window,
+        const char* vertexFile,
+        const char* fragmentFile,
+        ShaderLanguage language
+    )
+    {
+        if (window == nullptr)
+        {
+            throw std::runtime_error(
+                "Shader created with null GraphicsWindow"
+            );
+        }
 
-Shader::Shader(const char* vertexFile, const char* fragmentFile)
-{
-    std::string vertexCode = get_file_contents(vertexFile);
-    std::string fragmentCode = get_file_contents(fragmentFile);
+        this->window = window;
 
-    const char* vertexSource = vertexCode.c_str();
-    const char* fragmentSource = fragmentCode.c_str();
 
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexSource, NULL);
-    glCompileShader(vertexShader);
+        //
+        // If the caller doesn't specify the language,
+        // we'll determine it from the renderer later.
+        //
 
-    compileErrors(vertexShader, "VERTEX");
+        this->language = language;
 
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
-    glCompileShader(fragmentShader);
+        GraphicsRenderer renderer =
+            GetGraphicsRenderer(window);
 
-    compileErrors(vertexShader, "FRAGMENT");
 
-    ID = glCreateProgram();
-    glAttachShader(ID, vertexShader);
-    glAttachShader(ID, fragmentShader);
+        //
+        // OpenGL
+        //
 
-    glLinkProgram(ID);
+        if (renderer.API == Renderer::GL)
+        {
+            backend = new Backend();
 
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-}
+            backend->OpenGL =
+                new OpenGLShader(
+                    vertexFile,
+                    fragmentFile
+                );
 
-void Shader::Activate()
-{
-    glUseProgram(ID);
-}
+            return;
+        }
 
-void Shader::Delete()
-{
-    glDeleteProgram(ID);
-}
 
-void Shader::compileErrors(unsigned int shader, const char* type)
-{
-    GLint hasCompiled;
+        //
+        // DirectX
+        //
 
-    char infoLog[1024];
-	if (type != "PROGRAM")
-	{
-		glGetShaderiv(shader, GL_COMPILE_STATUS, &hasCompiled);
-		if (hasCompiled == GL_FALSE)
-		{
-			glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-			std::cout << "SHADER_COMPILATION_ERROR for:" << type << "\n" << infoLog << std::endl;
-		}
-	}
-	else
-	{
-		glGetProgramiv(shader, GL_LINK_STATUS, &hasCompiled);
-		if (hasCompiled == GL_FALSE)
-		{
-			glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-			std::cout << "SHADER_LINKING_ERROR for:" << type << "\n" << infoLog << std::endl;
-		}
-	}
-}
+        if (renderer.API == Renderer::DX)
+        {
+            throw std::runtime_error(
+                "DirectX Shader backend is not implemented yet."
+            );
+        }
 
-void Shader::SetBool(const std::string& name, bool value)
-{
-    glUniform1i(glGetUniformLocation(ID, name.c_str()), (int)value);
-}
 
-void Shader::SetInt(const std::string& name, int value)
-{
-    glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
-}
+        //
+        // Vulkan
+        //
 
-void Shader::SetFloat(const std::string& name, float value)
-{
-    glUniform1f(glGetUniformLocation(ID, name.c_str()), value);
-}
+        if (renderer.API == Renderer::VK)
+        {
+            throw std::runtime_error(
+                "Vulkan Shader backend is not implemented yet."
+            );
+        }
 
-void Shader::SetVec3(const std::string& name, const glm::vec3& value)
-{
-    glUniform3fv(glGetUniformLocation(ID, name.c_str()), 1, glm::value_ptr(value));
-}
 
-void Shader::SetVec4(const std::string& name, const glm::vec4& value)
-{
-    glUniform4fv(glGetUniformLocation(ID, name.c_str()), 1, glm::value_ptr(value));
-}
+        //
+        // Software
+        //
 
-void Shader::SetMat4(const std::string& name, const glm::mat4& mat)
-{
-    glUniformMatrix4fv(
-        glGetUniformLocation(ID, name.c_str()),
-        1,
-        GL_FALSE,
-        glm::value_ptr(mat)
-    );
+        if (renderer.API == Renderer::Software)
+        {
+            throw std::runtime_error(
+                "Software Shader backend is not implemented yet."
+            );
+
+
+        }
+
+        throw std::runtime_error(
+            "Graphics renderer does not support shaders."
+        );
+    }
+
+
+    Shader::~Shader()
+    {
+        Delete();
+    }
+
+
+    TE::Shader::Shader(
+        TE::Shader&& other
+    ) noexcept
+    {
+        backend = other.backend;
+        window = other.window;
+        language = other.language;
+
+        other.backend = nullptr;
+        other.window = nullptr;
+    }
+
+
+    TE::Shader& Shader::operator=(
+        TE::Shader&& other
+    ) noexcept
+    {
+        if (this != &other)
+        {
+            Delete();
+
+            backend = other.backend;
+            window = other.window;
+            language = other.language;
+
+            other.backend = nullptr;
+            other.window = nullptr;
+        }
+
+        return *this;
+    }
+
+
+    void Shader::Activate()
+    {
+        if (backend == nullptr)
+            return;
+
+        if (backend->OpenGL != nullptr)
+        {
+            GraphicsMakeCurrent(window);
+
+            backend->OpenGL->Activate();
+        }
+    }
+
+
+    void Shader::Delete()
+    {
+        if (backend == nullptr)
+            return;
+
+        if (window != nullptr)
+        {
+            GraphicsMakeCurrent(window);
+        }
+
+        delete backend->OpenGL;
+        backend->OpenGL = nullptr;
+
+        delete backend;
+        backend = nullptr;
+    }
+
+
+    void Shader::SetBool(
+        const std::string& name,
+        bool value
+    )
+    {
+        if (backend == nullptr)
+            return;
+
+        GraphicsMakeCurrent(window);
+
+        if (backend->OpenGL != nullptr)
+        {
+            backend->OpenGL->SetBool(
+                name,
+                value
+            );
+        }
+    }
+
+
+    void Shader::SetInt(
+        const std::string& name,
+        int value
+    )
+    {
+        if (backend == nullptr)
+            return;
+
+        GraphicsMakeCurrent(window);
+
+        if (backend->OpenGL != nullptr)
+        {
+            backend->OpenGL->SetInt(
+                name,
+                value
+            );
+        }
+    }
+
+
+    void Shader::SetFloat(
+        const std::string& name,
+        float value
+    )
+    {
+        if (backend == nullptr)
+            return;
+
+        GraphicsMakeCurrent(window);
+
+        if (backend->OpenGL != nullptr)
+        {
+            backend->OpenGL->SetFloat(
+                name,
+                value
+            );
+        }
+    }
+
+
+    void Shader::SetVec3(
+        const std::string& name,
+        const glm::vec3& value
+    )
+    {
+        if (backend == nullptr)
+            return;
+
+        GraphicsMakeCurrent(window);
+
+        if (backend->OpenGL != nullptr)
+        {
+            backend->OpenGL->SetVec3(
+                name,
+                value
+            );
+        }
+    }
+
+
+    void Shader::SetVec4(
+        const std::string& name,
+        const glm::vec4& value
+    )
+    {
+        if (backend == nullptr)
+            return;
+
+        GraphicsMakeCurrent(window);
+
+        if (backend->OpenGL != nullptr)
+        {
+            backend->OpenGL->SetVec4(
+                name,
+                value
+            );
+        }
+    }
+
+
+    void Shader::SetMat4(
+        const std::string& name,
+        const glm::mat4& value
+    )
+    {
+        if (backend == nullptr)
+            return;
+
+        GraphicsMakeCurrent(window);
+
+        if (backend->OpenGL != nullptr)
+        {
+            backend->OpenGL->SetMat4(
+                name,
+                value
+            );
+        }
+    }
+
+
+    ShaderLanguage Shader::GetLanguage() const
+    {
+        return language;
+    }
+
+
+    GraphicsWindow* Shader::GetWindow() const
+    {
+        return window;
+    }
+
 }

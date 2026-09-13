@@ -3,6 +3,9 @@
 #include <string>
 #include <thread>
 #include <mutex>
+#include <vector>
+#include <atomic>
+#include <algorithm>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOGDI
@@ -14,9 +17,39 @@
 #include "ImGUI/imgui.h"
 #include "rlImGUI/rlImGui.h"
 
+
+// ================================================================
+// Application
+// ================================================================
+
 std::string currentVersion = "App version: 0.0.6";
 
-void PrintHelp( void )
+
+// ================================================================
+// Console
+// ================================================================
+
+std::string consoleOutput;
+std::mutex consoleMutex;
+
+constexpr size_t MAX_CONSOLE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+
+// ================================================================
+// Command threads
+// ================================================================
+
+std::vector<std::thread> commandThreads;
+std::mutex commandMutex;
+
+std::atomic<bool> commandRunning = false;
+
+
+// ================================================================
+// Help
+// ================================================================
+
+void PrintHelp(void)
 {
     std::cout << "Available commands:\n";
     std::cout << "  help\n";
@@ -29,19 +62,60 @@ void PrintHelp( void )
     std::cout << "  --runLevelEditor\n";
 }
 
-void deInit()
-{
-    rlImGuiShutdown();
 
-    CloseWindow();
+// ================================================================
+// Add output safely
+// ================================================================
+
+void AppendConsoleOutput(const char* data, size_t size)
+{
+    std::lock_guard<std::mutex> lock(consoleMutex);
+
+    consoleOutput.append(data, size);
+
+    // Prevent unlimited memory growth.
+    if (consoleOutput.size() > MAX_CONSOLE_SIZE)
+    {
+        size_t amountToRemove =
+            consoleOutput.size() - MAX_CONSOLE_SIZE;
+
+        consoleOutput.erase(
+            0,
+            amountToRemove
+        );
+    }
 }
 
-std::string consoleOutput;
-std::mutex consoleMutex;
+
+// ================================================================
+// Run command
+// ================================================================
 
 void RunCommand(const std::string& command)
 {
+    // ------------------------------------------------------------
+    // Prevent multiple commands from running simultaneously
+    // ------------------------------------------------------------
+
+    bool expected = false;
+
+    if (!commandRunning.compare_exchange_strong(expected, true))
+    {
+        AppendConsoleOutput(
+            "\n[Builder] A command is already running.\n",
+            43
+        );
+
+        return;
+    }
+
+
+    // ------------------------------------------------------------
+    // Create pipe
+    // ------------------------------------------------------------
+
     SECURITY_ATTRIBUTES sa{};
+
     sa.nLength = sizeof(SECURITY_ATTRIBUTES);
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = nullptr;
@@ -49,22 +123,52 @@ void RunCommand(const std::string& command)
     HANDLE hRead = nullptr;
     HANDLE hWrite = nullptr;
 
-    if (!CreatePipe(&hRead, &hWrite, &sa, 0))
-        return;
+    if (!CreatePipe(
+        &hRead,
+        &hWrite,
+        &sa,
+        0))
+    {
+        AppendConsoleOutput(
+            "\n[Builder] Failed to create output pipe.\n",
+            42
+        );
 
-    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
+        commandRunning = false;
+        return;
+    }
+
+
+    // The parent must not inherit the read handle.
+
+    SetHandleInformation(
+        hRead,
+        HANDLE_FLAG_INHERIT,
+        0
+    );
+
+
+    // ------------------------------------------------------------
+    // Create process
+    // ------------------------------------------------------------
 
     STARTUPINFOA si{};
+
     PROCESS_INFORMATION pi{};
 
     si.cb = sizeof(STARTUPINFOA);
+
     si.dwFlags |= STARTF_USESTDHANDLES;
+
     si.hStdOutput = hWrite;
     si.hStdError = hWrite;
 
-    std::string cmdLine = "cmd.exe /C " + command;
 
-    if (!CreateProcessA(
+    std::string cmdLine =
+        "cmd.exe /C " + command;
+
+
+    BOOL processCreated = CreateProcessA(
         nullptr,
         cmdLine.data(),
         nullptr,
@@ -74,115 +178,259 @@ void RunCommand(const std::string& command)
         nullptr,
         nullptr,
         &si,
-        &pi))
+        &pi
+    );
+
+
+    if (!processCreated)
     {
+        AppendConsoleOutput(
+            "\n[Builder] Failed to start command.\n",
+            37
+        );
+
         CloseHandle(hWrite);
         CloseHandle(hRead);
+
+        commandRunning = false;
+
         return;
     }
 
+
+    // ------------------------------------------------------------
+    // Parent no longer needs the write handle
+    // ------------------------------------------------------------
+
     CloseHandle(hWrite);
+    hWrite = nullptr;
+
+
+    // ------------------------------------------------------------
+    // Read command output
+    // ------------------------------------------------------------
 
     char buffer[4096];
-    DWORD bytesRead;
 
-    while (ReadFile(hRead, buffer, sizeof(buffer) - 1, &bytesRead, nullptr)
-           && bytesRead > 0)
+    DWORD bytesRead = 0;
+
+    while (ReadFile(
+        hRead,
+        buffer,
+        sizeof(buffer),
+        &bytesRead,
+        nullptr)
+        && bytesRead > 0)
     {
-        buffer[bytesRead] = '\0';
-
-        std::lock_guard<std::mutex> lock(consoleMutex);
-        consoleOutput += buffer;
+        AppendConsoleOutput(
+            buffer,
+            bytesRead
+        );
     }
 
-    WaitForSingleObject(pi.hProcess, INFINITE);
+
+    // ------------------------------------------------------------
+    // Wait for process
+    // ------------------------------------------------------------
+
+    WaitForSingleObject(
+        pi.hProcess,
+        INFINITE
+    );
+
+
+    // ------------------------------------------------------------
+    // Cleanup process handles
+    // ------------------------------------------------------------
 
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
+
     CloseHandle(hRead);
+
+
+    // ------------------------------------------------------------
+    // Command finished
+    // ------------------------------------------------------------
+
+    commandRunning = false;
 }
+
+
+// ================================================================
+// Start command
+// ================================================================
+
+void StartCommand(const std::string& command)
+{
+    std::lock_guard<std::mutex> lock(commandMutex);
+
+    commandThreads.emplace_back(
+        RunCommand,
+        command
+    );
+}
+
+
+// ================================================================
+// Join all command threads
+// ================================================================
+
+void JoinCommandThreads()
+{
+    std::lock_guard<std::mutex> lock(commandMutex);
+
+    for (std::thread& thread : commandThreads)
+    {
+        if (thread.joinable())
+        {
+            thread.join();
+        }
+    }
+
+    commandThreads.clear();
+}
+
+
+// ================================================================
+// Deinitialize
+// ================================================================
+
+void deInit()
+{
+    // Make sure background commands are finished
+    // before destroying the GUI.
+
+    JoinCommandThreads();
+
+    rlImGuiShutdown();
+
+    CloseWindow();
+}
+
+
+// ================================================================
+// Main
+// ================================================================
 
 int main(int argc, char* argv[])
 {
-    if (argc < 2)
-    {
-    }
-    else
+    // ============================================================
+    // Command line mode
+    // ============================================================
+
+    if (argc >= 2)
     {
         std::string cmd = argv[1];
 
-        if(cmd == "help")
+
+        if (cmd == "help" ||
+            cmd == "-help" ||
+            cmd == "--help")
         {
             PrintHelp();
 
             return 0;
         }
-        else if(cmd == "-help")
-        {
-            PrintHelp();
 
-            return 0;
-        }
-        else if(cmd == "--help")
-        {
-            PrintHelp();
 
-            return 0;
-        }
         else if (cmd == "--version")
         {
-            std::cout << currentVersion << std::endl;
+            std::cout
+                << currentVersion
+                << std::endl;
 
             return 0;
         }
+
+
         else if (cmd == "--buildEngine")
         {
-            std::cout << "Building the Engine\n";
+            std::cout
+                << "Building the Engine\n";
 
-            std::system("buildEngine.bat");
-
-            return 0;
+            return std::system(
+                "buildEngine.bat"
+            );
         }
+
+
         else if (cmd == "--buildLevelEditor")
         {
-            std::cout << "Building the Level Editor\n";
+            std::cout
+                << "Building the Level Editor\n";
 
-            std::system("buildLevelEditor.bat");
-
-            return 0;
+            return std::system(
+                "buildLevelEditor.bat"
+            );
         }
+
+
         else if (cmd == "--runEngine")
         {
-            std::cout << "Running the Engine\n";
+            std::cout
+                << "Running the Engine\n";
 
-            std::system("runEngine.bat");
-
-            return 0;
+            return std::system(
+                "runEngine.bat"
+            );
         }
+
+
         else if (cmd == "--runLevelEditor")
         {
-            std::cout << "Running the Level Editor\n";
+            std::cout
+                << "Running the Level Editor\n";
 
-            std::system("runLevelEditor.bat");
-
-            return 0;
+            return std::system(
+                "runLevelEditor.bat"
+            );
         }
+
+
         else
         {
-            std::cout << "Unknown command.\n" << std::endl;
+            std::cout
+                << "Unknown command.\n\n";
 
             PrintHelp();
+
+            return 1;
         }
     }
 
+
+    // ============================================================
+    // Raylib
+    // ============================================================
+
     SetTraceLogLevel(LOG_ERROR);
 
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(1280, 720, "Builder");
+    SetConfigFlags(
+        FLAG_WINDOW_RESIZABLE
+    );
+
+    InitWindow(
+        1280,
+        720,
+        "Builder"
+    );
 
     rlImGuiSetup(true);
 
+
+    // ============================================================
+    // GUI state
+    // ============================================================
+
     bool showAbout = false;
+
+    bool quitRequested = false;
+
+
+    // ============================================================
+    // Main loop
+    // ============================================================
 
     while (!WindowShouldClose())
     {
@@ -192,8 +440,17 @@ int main(int argc, char* argv[])
 
         rlImGuiBegin();
 
+
+        // ========================================================
+        // Main menu
+        // ========================================================
+
         if (ImGui::BeginMainMenuBar())
         {
+            // ----------------------------------------------------
+            // About
+            // ----------------------------------------------------
+
             if (ImGui::BeginMenu("About"))
             {
                 if (ImGui::MenuItem("About"))
@@ -201,95 +458,151 @@ int main(int argc, char* argv[])
                     showAbout = true;
                 }
 
+
                 if (ImGui::MenuItem("Clear Console"))
                 {
+                    std::lock_guard<std::mutex> lock(
+                        consoleMutex
+                    );
+
                     consoleOutput.clear();
                 }
 
+
                 ImGui::EndMenu();
             }
+
+
+            // ----------------------------------------------------
+            // Build
+            // ----------------------------------------------------
 
             if (ImGui::BeginMenu("Build"))
             {
-                if (ImGui::MenuItem("Build Engine"))
+                if (ImGui::MenuItem(
+                    "Build Engine",
+                    nullptr,
+                    false,
+                    !commandRunning.load()))
                 {
-                    std::thread(RunCommand, "buildEngine.bat").detach();
-                }
-                
-                if (ImGui::MenuItem("Build Level Editor"))
-                {
-                    std::thread(RunCommand, "buildLevelEditor.bat").detach();
+                    StartCommand(
+                        "buildEngine.bat"
+                    );
                 }
 
-                // if (ImGui::MenuItem("Build Compiler"))
-                // {
-                //     consoleOutput.clear();
-                //     std::thread(RunCommand, "buildCompiler.bat").detach();
-                // }
 
-                // if (ImGui::MenuItem("Build Level Editor .dll"))
-                // {
-                //     std::thread(RunCommand, "buildLevelEditordll.bat").detach();
-                // }
+                if (ImGui::MenuItem(
+                    "Build Level Editor",
+                    nullptr,
+                    false,
+                    !commandRunning.load()))
+                {
+                    StartCommand(
+                        "buildLevelEditor.bat"
+                    );
+                }
+
 
                 ImGui::EndMenu();
             }
+
+
+            // ----------------------------------------------------
+            // Run
+            // ----------------------------------------------------
 
             if (ImGui::BeginMenu("Run"))
             {
-                if (ImGui::MenuItem("Run Engine"))
+                if (ImGui::MenuItem(
+                    "Run Engine",
+                    nullptr,
+                    false,
+                    !commandRunning.load()))
                 {
-                    std::thread(RunCommand, "runEngine.bat").detach();
+                    StartCommand(
+                        "runEngine.bat"
+                    );
                 }
 
-                if (ImGui::MenuItem("Run Level Editor"))
+
+                if (ImGui::MenuItem(
+                    "Run Level Editor",
+                    nullptr,
+                    false,
+                    !commandRunning.load()))
                 {
-                    std::thread(RunCommand, "runLevelEditor.bat").detach();
+                    StartCommand(
+                        "runLevelEditor.bat"
+                    );
                 }
 
-                // if (ImGui::MenuItem("Run New Compiler"))
-                // {
-                //     consoleOutput.clear();
-                //     std::thread(RunCommand, "runCompiler.bat").detach();
-                    
-                //     deInit();
-
-                //     return 0;
-                // }
 
                 ImGui::EndMenu();
             }
+
+
+            // ----------------------------------------------------
+            // Quit
+            // ----------------------------------------------------
 
             if (ImGui::BeginMenu("Quit"))
             {
-                deInit();
-    
+                if (ImGui::MenuItem("Quit"))
+                {
+                    quitRequested = true;
+                }
+
                 ImGui::EndMenu();
-                return 0;
             }
+
 
             ImGui::EndMainMenuBar();
         }
 
+
+        // ========================================================
+        // About window
+        // ========================================================
+
         if (showAbout)
         {
-            ImGui::Begin("About", &showAbout);
+            ImGui::Begin(
+                "About",
+                &showAbout
+            );
 
-            ImGui::Text("%s\n", currentVersion.c_str());
-            ImGui::Text("This is Something I made to make compiling my projects easier! \n");
+
+            ImGui::Text(
+                "%s",
+                currentVersion.c_str()
+            );
+
+
+            ImGui::Text(
+                "This is Something I made to make compiling "
+                "my projects easier!"
+            );
+
 
             ImGui::End();
         }
+
+
+        // ========================================================
+        // Console
+        // ========================================================
 
         ImGui::SetNextWindowPos(
             ImVec2(0, 25),
             ImGuiCond_Always
         );
 
+
         ImGui::SetNextWindowSize(
             ImVec2(1280, 695),
             ImGuiCond_Always
         );
+
 
         ImGui::Begin(
             "Console",
@@ -297,22 +610,12 @@ int main(int argc, char* argv[])
             ImGuiWindowFlags_NoMove
         );
 
+
         {
-            std::lock_guard<std::mutex> lock(consoleMutex);
+            std::lock_guard<std::mutex> lock(
+                consoleMutex
+            );
 
-            // ImGui::BeginChild(
-            //     "ConsoleOutput",
-            //     ImVec2(0, 0),
-            //     true,
-            //     ImGuiWindowFlags_HorizontalScrollbar
-            // );
-
-            // ImGui::TextUnformatted(consoleOutput.c_str());
-
-            // if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-            //     ImGui::SetScrollHereY(1.0f);
-
-            // ImGui::EndChild();
 
             ImGui::BeginChild(
                 "ConsoleOutput",
@@ -320,6 +623,7 @@ int main(int argc, char* argv[])
                 true,
                 ImGuiWindowFlags_HorizontalScrollbar
             );
+
 
             ImGui::InputTextMultiline(
                 "##ConsoleText",
@@ -329,16 +633,39 @@ int main(int argc, char* argv[])
                 ImGuiInputTextFlags_ReadOnly
             );
 
+
             ImGui::EndChild();
         }
 
+
         ImGui::End();
-        
+
+
+        // ========================================================
+        // End frame
+        // ========================================================
+
         rlImGuiEnd();
 
         EndDrawing();
+
+
+        // ========================================================
+        // Quit after the frame is completely finished
+        // ========================================================
+
+        if (quitRequested)
+        {
+            break;
+        }
     }
 
+
+    // ============================================================
+    // Shutdown
+    // ============================================================
+
     deInit();
+
     return 0;
 }

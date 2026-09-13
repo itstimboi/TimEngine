@@ -6,1810 +6,1812 @@
 #include <cstring>
 #include <algorithm>
 
-
-std::vector<Model*> Model::modelCache;
-
-
-// ============================================================
-// Constructor
-// ============================================================
-
-Model::Model(
-    const char* file,
-    unsigned int instancing,
-    std::vector<glm::mat4> instanceMatrix
-)
+namespace TE
 {
-    Model::file = file;
 
-    // --------------------------------------------------------
-    // Load JSON
-    // --------------------------------------------------------
-
-    std::string text =
-        get_file_contents(file);
-
-    if (text.empty())
-    {
-        throw std::runtime_error(
-            std::string("Failed to read model: ") + file
-        );
-    }
-
-    JSON =
-        json::parse(text);
+    std::vector<Model*> Model::modelCache;
 
 
-    // --------------------------------------------------------
-    // Load binary buffer
-    // --------------------------------------------------------
+    // ============================================================
+    // Constructor
+    // ============================================================
 
-    data =
-        getData();
-
-
-    // --------------------------------------------------------
-    // Instancing
-    // --------------------------------------------------------
-
-    Model::instancing =
-        instancing;
-
-    Model::instanceMatrix =
-        instanceMatrix;
-
-
-    // --------------------------------------------------------
-    // Load default scene
-    // --------------------------------------------------------
-
-    if (
-        JSON.contains("scenes") &&
-        JSON.contains("scene")
+    Model::Model(
+        const char* file,
+        unsigned int instancing,
+        std::vector<glm::mat4> instanceMatrix
     )
     {
-        unsigned int sceneIndex =
-            JSON["scene"];
+        Model::file = file;
 
-        if (
-            sceneIndex >=
-            JSON["scenes"].size()
-        )
+        // --------------------------------------------------------
+        // Load JSON
+        // --------------------------------------------------------
+
+        std::string text =
+            get_file_contents(file);
+
+        if (text.empty())
         {
             throw std::runtime_error(
-                "Invalid glTF scene index"
+                std::string("Failed to read model: ") + file
             );
         }
 
-        auto& scene =
-            JSON["scenes"][sceneIndex];
+        JSON =
+            json::parse(text);
 
 
-        if (scene.contains("nodes"))
+        // --------------------------------------------------------
+        // Load binary buffer
+        // --------------------------------------------------------
+
+        data =
+            getData();
+
+
+        // --------------------------------------------------------
+        // Instancing
+        // --------------------------------------------------------
+
+        Model::instancing =
+            instancing;
+
+        Model::instanceMatrix =
+            instanceMatrix;
+
+
+        // --------------------------------------------------------
+        // Load default scene
+        // --------------------------------------------------------
+
+        if (
+            JSON.contains("scenes") &&
+            JSON.contains("scene")
+        )
         {
-            for (auto& node : scene["nodes"])
+            unsigned int sceneIndex =
+                JSON["scene"];
+
+            if (
+                sceneIndex >=
+                JSON["scenes"].size()
+            )
             {
-                traverseNode(
-                    node
+                throw std::runtime_error(
+                    "Invalid glTF scene index"
                 );
+            }
+
+            auto& scene =
+                JSON["scenes"][sceneIndex];
+
+
+            if (scene.contains("nodes"))
+            {
+                for (auto& node : scene["nodes"])
+                {
+                    traverseNode(
+                        node
+                    );
+                }
+            }
+        }
+
+        // --------------------------------------------------------
+        // Fallback
+        // --------------------------------------------------------
+
+        else if (JSON.contains("nodes"))
+        {
+            for (
+                unsigned int i = 0;
+                i < JSON["nodes"].size();
+                i++
+            )
+            {
+                traverseNode(i);
             }
         }
     }
 
-    // --------------------------------------------------------
-    // Fallback
-    // --------------------------------------------------------
 
-    else if (JSON.contains("nodes"))
+    // ============================================================
+    // Draw
+    // ============================================================
+
+    void Model::Draw(
+        TE::Shader& shader,
+        Camera& camera,
+        const glm::mat4& transform
+    )
     {
         for (
             unsigned int i = 0;
-            i < JSON["nodes"].size();
+            i < meshes.size();
             i++
         )
         {
-            traverseNode(i);
+            glm::mat4 finalMatrix =
+                transform *
+                matricesMeshes[i];
+
+
+            meshes[i].Mesh::Draw(
+                shader,
+                camera,
+                finalMatrix
+            );
         }
     }
-}
 
 
-// ============================================================
-// Draw
-// ============================================================
+    // ============================================================
+    // Init
+    // ============================================================
 
-void Model::Draw(
-    Shader& shader,
-    Camera& camera,
-    const glm::mat4& transform
-)
-{
-    for (
-        unsigned int i = 0;
-        i < meshes.size();
-        i++
+    bool Model::Init()
+    {
+        modelCache.clear();
+
+        return true;
+    }
+
+
+    // ============================================================
+    // Shutdown
+    // ============================================================
+
+    void Model::Shutdown()
+    {
+        for (Model* model : modelCache)
+        {
+            delete model;
+        }
+
+        modelCache.clear();
+    }
+
+
+    // ============================================================
+    // Pre-cache model
+    // ============================================================
+
+    ModelHandle Model::Pre_CacheModel(
+        const std::string& path
     )
     {
-        glm::mat4 finalMatrix =
-            transform *
-            matricesMeshes[i];
+        Model* model =
+            new Model(
+                path.c_str()
+            );
+
+        modelCache.push_back(
+            model
+        );
+
+        return static_cast<ModelHandle>(
+            modelCache.size() - 1
+        );
+    }
 
 
-        meshes[i].Mesh::Draw(
+    // ============================================================
+    // Draw cached model
+    // ============================================================
+
+    void Model::DrawModel(
+        ModelHandle handle,
+        TE::Shader& shader,
+        Camera& camera,
+        const glm::mat4& transform
+    )
+    {
+        if (
+            handle >=
+            modelCache.size()
+        )
+        {
+            std::cerr
+                << "Invalid ModelHandle: "
+                << handle
+                << std::endl;
+
+            return;
+        }
+
+
+        modelCache[handle]->Draw(
             shader,
             camera,
-            finalMatrix
+            transform
         );
     }
-}
 
 
-// ============================================================
-// Init
-// ============================================================
+    // ============================================================
+    // Load mesh
+    // ============================================================
 
-bool Model::Init()
-{
-    modelCache.clear();
-
-    return true;
-}
-
-
-// ============================================================
-// Shutdown
-// ============================================================
-
-void Model::Shutdown()
-{
-    for (Model* model : modelCache)
-    {
-        delete model;
-    }
-
-    modelCache.clear();
-}
-
-
-// ============================================================
-// Pre-cache model
-// ============================================================
-
-ModelHandle Model::Pre_CacheModel(
-    const std::string& path
-)
-{
-    Model* model =
-        new Model(
-            path.c_str()
-        );
-
-    modelCache.push_back(
-        model
-    );
-
-    return static_cast<ModelHandle>(
-        modelCache.size() - 1
-    );
-}
-
-
-// ============================================================
-// Draw cached model
-// ============================================================
-
-void Model::DrawModel(
-    ModelHandle handle,
-    Shader& shader,
-    Camera& camera,
-    const glm::mat4& transform
-)
-{
-    if (
-        handle >=
-        modelCache.size()
+    void Model::loadMesh(
+        unsigned int indMesh
     )
     {
-        std::cerr
-            << "Invalid ModelHandle: "
-            << handle
-            << std::endl;
-
-        return;
-    }
-
-
-    modelCache[handle]->Draw(
-        shader,
-        camera,
-        transform
-    );
-}
-
-
-// ============================================================
-// Load mesh
-// ============================================================
-
-void Model::loadMesh(
-    unsigned int indMesh
-)
-{
-    if (!JSON.contains("meshes"))
-    {
-        throw std::runtime_error(
-            "glTF contains no meshes"
-        );
-    }
-
-
-    if (
-        indMesh >=
-        JSON["meshes"].size()
-    )
-    {
-        throw std::runtime_error(
-            "Invalid mesh index"
-        );
-    }
-
-
-    auto& meshJSON =
-        JSON["meshes"][indMesh];
-
-
-    if (!meshJSON.contains("primitives"))
-        return;
-
-
-    // --------------------------------------------------------
-    // A glTF mesh can have multiple primitives.
-    // --------------------------------------------------------
-
-    for (
-        unsigned int primitiveIndex = 0;
-        primitiveIndex <
-        meshJSON["primitives"].size();
-        primitiveIndex++
-    )
-    {
-        auto& primitive =
-            meshJSON["primitives"]
-                    [primitiveIndex];
-
-
-        if (!primitive.contains("attributes"))
+        if (!JSON.contains("meshes"))
         {
-            std::cerr
-                << "Primitive has no attributes\n";
-
-            continue;
-        }
-
-
-        auto& attributes =
-            primitive["attributes"];
-
-
-        // ----------------------------------------------------
-        // POSITION
-        // ----------------------------------------------------
-
-        if (!attributes.contains("POSITION"))
-        {
-            std::cerr
-                << "Primitive has no POSITION\n";
-
-            continue;
-        }
-
-
-        unsigned int posAccInd =
-            attributes["POSITION"];
-
-
-        std::vector<float> posVec =
-            getFloats(
-                JSON["accessors"][posAccInd]
+            throw std::runtime_error(
+                "glTF contains no meshes"
             );
-
-
-        std::vector<glm::vec3> positions =
-            groupFloatsVec3(
-                posVec
-            );
-
-
-        // ----------------------------------------------------
-        // NORMAL
-        // ----------------------------------------------------
-
-        std::vector<glm::vec3> normals;
-
-
-        if (attributes.contains("NORMAL"))
-        {
-            unsigned int normalAccInd =
-                attributes["NORMAL"];
-
-
-            std::vector<float> normalVec =
-                getFloats(
-                    JSON["accessors"][normalAccInd]
-                );
-
-
-            normals =
-                groupFloatsVec3(
-                    normalVec
-                );
         }
 
 
         if (
-            normals.size() !=
-            positions.size()
+            indMesh >=
+            JSON["meshes"].size()
         )
         {
-            normals.resize(
-                positions.size(),
-                glm::vec3(
-                    0.0f,
-                    1.0f,
-                    0.0f
+            throw std::runtime_error(
+                "Invalid mesh index"
+            );
+        }
+
+
+        auto& meshJSON =
+            JSON["meshes"][indMesh];
+
+
+        if (!meshJSON.contains("primitives"))
+            return;
+
+
+        // --------------------------------------------------------
+        // A glTF mesh can have multiple primitives.
+        // --------------------------------------------------------
+
+        for (
+            unsigned int primitiveIndex = 0;
+            primitiveIndex <
+            meshJSON["primitives"].size();
+            primitiveIndex++
+        )
+        {
+            auto& primitive =
+                meshJSON["primitives"]
+                        [primitiveIndex];
+
+
+            if (!primitive.contains("attributes"))
+            {
+                std::cerr
+                    << "Primitive has no attributes\n";
+
+                continue;
+            }
+
+
+            auto& attributes =
+                primitive["attributes"];
+
+
+            // ----------------------------------------------------
+            // POSITION
+            // ----------------------------------------------------
+
+            if (!attributes.contains("POSITION"))
+            {
+                std::cerr
+                    << "Primitive has no POSITION\n";
+
+                continue;
+            }
+
+
+            unsigned int posAccInd =
+                attributes["POSITION"];
+
+
+            std::vector<float> posVec =
+                getFloats(
+                    JSON["accessors"][posAccInd]
+                );
+
+
+            std::vector<glm::vec3> positions =
+                groupFloatsVec3(
+                    posVec
+                );
+
+
+            // ----------------------------------------------------
+            // NORMAL
+            // ----------------------------------------------------
+
+            std::vector<glm::vec3> normals;
+
+
+            if (attributes.contains("NORMAL"))
+            {
+                unsigned int normalAccInd =
+                    attributes["NORMAL"];
+
+
+                std::vector<float> normalVec =
+                    getFloats(
+                        JSON["accessors"][normalAccInd]
+                    );
+
+
+                normals =
+                    groupFloatsVec3(
+                        normalVec
+                    );
+            }
+
+
+            if (
+                normals.size() !=
+                positions.size()
+            )
+            {
+                normals.resize(
+                    positions.size(),
+                    glm::vec3(
+                        0.0f,
+                        1.0f,
+                        0.0f
+                    )
+                );
+            }
+
+
+            // ----------------------------------------------------
+            // TEXCOORD_0
+            // ----------------------------------------------------
+
+            std::vector<glm::vec2> texUVs;
+
+
+            if (
+                attributes.contains(
+                    "TEXCOORD_0"
+                )
+            )
+            {
+                unsigned int texAccInd =
+                    attributes["TEXCOORD_0"];
+
+
+                std::vector<float> texVec =
+                    getFloats(
+                        JSON["accessors"][texAccInd]
+                    );
+
+
+                texUVs =
+                    groupFloatsVec2(
+                        texVec
+                    );
+            }
+
+
+            if (
+                texUVs.size() !=
+                positions.size()
+            )
+            {
+                texUVs.resize(
+                    positions.size(),
+                    glm::vec2(0.0f)
+                );
+            }
+
+
+            // ----------------------------------------------------
+            // JOINTS_0
+            // ----------------------------------------------------
+
+            std::vector<glm::ivec4> boneIDs;
+
+
+            if (
+                attributes.contains(
+                    "JOINTS_0"
+                )
+            )
+            {
+                unsigned int jointAccInd =
+                    attributes["JOINTS_0"];
+
+
+                boneIDs =
+                    getJointIndices(
+                        JSON["accessors"][jointAccInd]
+                    );
+            }
+
+
+            if (
+                boneIDs.size() !=
+                positions.size()
+            )
+            {
+                boneIDs.resize(
+                    positions.size(),
+                    glm::ivec4(0)
+                );
+            }
+
+
+            // ----------------------------------------------------
+            // WEIGHTS_0
+            // ----------------------------------------------------
+
+            std::vector<glm::vec4> weights;
+
+
+            if (
+                attributes.contains(
+                    "WEIGHTS_0"
+                )
+            )
+            {
+                unsigned int weightAccInd =
+                    attributes["WEIGHTS_0"];
+
+
+                std::vector<float> weightVec =
+                    getFloats(
+                        JSON["accessors"][weightAccInd]
+                    );
+
+
+                weights =
+                    groupFloatsVec4(
+                        weightVec
+                    );
+            }
+
+
+            if (
+                weights.size() !=
+                positions.size()
+            )
+            {
+                weights.resize(
+                    positions.size(),
+                    glm::vec4(0.0f)
+                );
+            }
+
+
+            // ----------------------------------------------------
+            // Indices
+            // ----------------------------------------------------
+
+            std::vector<unsigned int> indices;
+
+
+            if (
+                primitive.contains(
+                    "indices"
+                )
+            )
+            {
+                unsigned int indAccInd =
+                    primitive["indices"];
+
+
+                indices =
+                    getIndices(
+                        JSON["accessors"][indAccInd]
+                    );
+            }
+            else
+            {
+                indices.resize(
+                    positions.size()
+                );
+
+
+                for (
+                    unsigned int i = 0;
+                    i < positions.size();
+                    i++
+                )
+                {
+                    indices[i] =
+                        i;
+                }
+            }
+
+
+            // ----------------------------------------------------
+            // Textures
+            // ----------------------------------------------------
+            
+            std::vector<Texture> textures =
+                getTextures(
+                    primitive
+                );
+
+            std::cout
+                << "Textures: "
+                << textures.size()
+                << '\n';
+
+            // ----------------------------------------------------
+            // Build vertices
+            // ----------------------------------------------------
+
+            std::vector<Vertex> vertices =
+                assembleVertices(
+                    positions,
+                    normals,
+                    texUVs,
+                    boneIDs,
+                    weights
+                );
+
+
+            // ----------------------------------------------------
+            // Create Mesh
+            // ----------------------------------------------------
+
+            meshes.push_back(
+                Mesh(
+                    vertices,
+                    indices,
+                    textures,
+                    instancing,
+                    instanceMatrix
                 )
             );
         }
+    }
 
 
-        // ----------------------------------------------------
-        // TEXCOORD_0
-        // ----------------------------------------------------
+    // ============================================================
+    // Traverse node
+    // ============================================================
 
-        std::vector<glm::vec2> texUVs;
+    void Model::traverseNode(
+        unsigned int nextNode,
+        glm::mat4 matrix
+    )
+    {
+        if (
+            nextNode >=
+            JSON["nodes"].size()
+        )
+        {
+            std::cerr
+                << "Invalid node index: "
+                << nextNode
+                << '\n';
+
+            return;
+        }
+
+
+        json node =
+            JSON["nodes"][nextNode];
+
+
+        // --------------------------------------------------------
+        // Translation
+        // --------------------------------------------------------
+
+        glm::vec3 translation(
+            0.0f
+        );
 
 
         if (
-            attributes.contains(
-                "TEXCOORD_0"
+            node.contains(
+                "translation"
             )
         )
         {
-            unsigned int texAccInd =
-                attributes["TEXCOORD_0"];
-
-
-            std::vector<float> texVec =
-                getFloats(
-                    JSON["accessors"][texAccInd]
-                );
-
-
-            texUVs =
-                groupFloatsVec2(
-                    texVec
+            translation =
+                glm::vec3(
+                    node["translation"][0],
+                    node["translation"][1],
+                    node["translation"][2]
                 );
         }
 
 
-        if (
-            texUVs.size() !=
-            positions.size()
-        )
-        {
-            texUVs.resize(
-                positions.size(),
-                glm::vec2(0.0f)
-            );
-        }
+        // --------------------------------------------------------
+        // Rotation
+        // --------------------------------------------------------
 
-
-        // ----------------------------------------------------
-        // JOINTS_0
-        // ----------------------------------------------------
-
-        std::vector<glm::ivec4> boneIDs;
+        glm::quat rotation(
+            1.0f,
+            0.0f,
+            0.0f,
+            0.0f
+        );
 
 
         if (
-            attributes.contains(
-                "JOINTS_0"
+            node.contains(
+                "rotation"
             )
         )
         {
-            unsigned int jointAccInd =
-                attributes["JOINTS_0"];
-
-
-            boneIDs =
-                getJointIndices(
-                    JSON["accessors"][jointAccInd]
+            rotation =
+                glm::quat(
+                    node["rotation"][3],
+                    node["rotation"][0],
+                    node["rotation"][1],
+                    node["rotation"][2]
                 );
         }
 
 
-        if (
-            boneIDs.size() !=
-            positions.size()
-        )
-        {
-            boneIDs.resize(
-                positions.size(),
-                glm::ivec4(0)
-            );
-        }
+        // --------------------------------------------------------
+        // Scale
+        // --------------------------------------------------------
 
-
-        // ----------------------------------------------------
-        // WEIGHTS_0
-        // ----------------------------------------------------
-
-        std::vector<glm::vec4> weights;
+        glm::vec3 scale(
+            1.0f
+        );
 
 
         if (
-            attributes.contains(
-                "WEIGHTS_0"
+            node.contains(
+                "scale"
             )
         )
         {
-            unsigned int weightAccInd =
-                attributes["WEIGHTS_0"];
-
-
-            std::vector<float> weightVec =
-                getFloats(
-                    JSON["accessors"][weightAccInd]
-                );
-
-
-            weights =
-                groupFloatsVec4(
-                    weightVec
+            scale =
+                glm::vec3(
+                    node["scale"][0],
+                    node["scale"][1],
+                    node["scale"][2]
                 );
         }
 
 
-        if (
-            weights.size() !=
-            positions.size()
-        )
-        {
-            weights.resize(
-                positions.size(),
-                glm::vec4(0.0f)
-            );
-        }
+        // --------------------------------------------------------
+        // Matrix
+        // --------------------------------------------------------
 
-
-        // ----------------------------------------------------
-        // Indices
-        // ----------------------------------------------------
-
-        std::vector<GLuint> indices;
+        glm::mat4 matNode(
+            1.0f
+        );
 
 
         if (
-            primitive.contains(
-                "indices"
+            node.contains(
+                "matrix"
             )
         )
         {
-            unsigned int indAccInd =
-                primitive["indices"];
-
-
-            indices =
-                getIndices(
-                    JSON["accessors"][indAccInd]
-                );
-        }
-        else
-        {
-            indices.resize(
-                positions.size()
-            );
+            float matValues[16];
 
 
             for (
                 unsigned int i = 0;
-                i < positions.size();
+                i < 16;
                 i++
             )
             {
-                indices[i] =
-                    i;
+                matValues[i] =
+                    node["matrix"][i];
+            }
+
+
+            matNode =
+                glm::make_mat4(
+                    matValues
+                );
+        }
+
+
+        // --------------------------------------------------------
+        // Transform
+        // --------------------------------------------------------
+
+        glm::mat4 trans =
+            glm::translate(
+                glm::mat4(1.0f),
+                translation
+            );
+
+
+        glm::mat4 rot =
+            glm::mat4_cast(
+                rotation
+            );
+
+
+        glm::mat4 sca =
+            glm::scale(
+                glm::mat4(1.0f),
+                scale
+            );
+
+
+        glm::mat4 matNextNode =
+            matrix *
+            matNode *
+            trans *
+            rot *
+            sca;
+
+
+        // --------------------------------------------------------
+        // Mesh
+        // --------------------------------------------------------
+
+        if (
+            node.contains(
+                "mesh"
+            )
+        )
+        {
+            translationsMeshes.push_back(
+                translation
+            );
+
+            rotationsMeshes.push_back(
+                rotation
+            );
+
+            scalesMeshes.push_back(
+                scale
+            );
+
+            matricesMeshes.push_back(
+                matNextNode
+            );
+
+
+            loadMesh(
+                node["mesh"]
+            );
+        }
+
+
+        // --------------------------------------------------------
+        // Children
+        // --------------------------------------------------------
+
+        if (
+            node.contains(
+                "children"
+            )
+        )
+        {
+            for (
+                unsigned int i = 0;
+                i < node["children"].size();
+                i++
+            )
+            {
+                traverseNode(
+                    node["children"][i],
+                    matNextNode
+                );
+            }
+        }
+    }
+
+
+    // ============================================================
+    // Load binary data
+    // ============================================================
+
+    std::vector<unsigned char> Model::getData()
+    {
+        if (
+            !JSON.contains(
+                "buffers"
+            ) ||
+            JSON["buffers"].empty()
+        )
+        {
+            throw std::runtime_error(
+                "glTF contains no buffers"
+            );
+        }
+
+
+        std::string uri =
+            JSON["buffers"][0].value(
+                "uri",
+                ""
+            );
+
+
+        if (uri.empty())
+        {
+            throw std::runtime_error(
+                "Buffer has no URI"
+            );
+        }
+
+
+        std::filesystem::path modelPath(
+            file
+        );
+
+
+        std::filesystem::path binPath =
+            modelPath.parent_path() /
+            uri;
+
+
+        std::string path =
+            binPath.lexically_normal().string();
+
+
+        std::cout
+            << "Loading binary: "
+            << path
+            << '\n';
+
+
+        std::string bytesText =
+            get_file_contents(
+                path.c_str()
+            );
+
+
+        if (bytesText.empty())
+        {
+            throw std::runtime_error(
+                "Failed to load binary buffer: " +
+                path
+            );
+        }
+
+
+        return std::vector<unsigned char>(
+            bytesText.begin(),
+            bytesText.end()
+        );
+    }
+
+
+    // ============================================================
+    // Get FLOAT accessor
+    // ============================================================
+
+    std::vector<float> Model::getFloats(
+        json accessor
+    )
+    {
+        std::vector<float> floatVec;
+
+
+        if (!accessor.contains("bufferView"))
+        {
+            throw std::runtime_error(
+                "Accessor has no bufferView"
+            );
+        }
+
+
+        unsigned int buffViewInd =
+            accessor["bufferView"];
+
+
+        unsigned int count =
+            accessor["count"];
+
+
+        unsigned int accByteOffset =
+            accessor.value(
+                "byteOffset",
+                0
+            );
+
+
+        std::string type =
+            accessor["type"];
+
+
+        unsigned int componentType =
+            accessor["componentType"];
+
+
+        if (
+            componentType != 5126
+        )
+        {
+            throw std::runtime_error(
+                "Expected FLOAT accessor"
+            );
+        }
+
+
+        unsigned int numComponents = 0;
+
+
+        if (type == "SCALAR")
+            numComponents = 1;
+
+        else if (type == "VEC2")
+            numComponents = 2;
+
+        else if (type == "VEC3")
+            numComponents = 3;
+
+        else if (type == "VEC4")
+            numComponents = 4;
+
+        else
+            throw std::runtime_error(
+                "Unsupported accessor type: " +
+                type
+            );
+
+
+        if (
+            buffViewInd >=
+            JSON["bufferViews"].size()
+        )
+        {
+            throw std::runtime_error(
+                "Invalid bufferView index"
+            );
+        }
+
+
+        auto& bufferView =
+            JSON["bufferViews"][buffViewInd];
+
+
+        unsigned int byteOffset =
+            bufferView.value(
+                "byteOffset",
+                0
+            );
+
+
+        unsigned int elementSize =
+            sizeof(float) *
+            numComponents;
+
+
+        unsigned int byteStride =
+            bufferView.value(
+                "byteStride",
+                elementSize
+            );
+
+
+        unsigned int beginningOfData =
+            byteOffset +
+            accByteOffset;
+
+
+        for (
+            unsigned int element = 0;
+            element < count;
+            element++
+        )
+        {
+            unsigned int elementOffset =
+                beginningOfData +
+                element * byteStride;
+
+
+            for (
+                unsigned int component = 0;
+                component < numComponents;
+                component++
+            )
+            {
+                unsigned int offset =
+                    elementOffset +
+                    component *
+                    sizeof(float);
+
+
+                if (
+                    offset +
+                    sizeof(float) >
+                    data.size()
+                )
+                {
+                    throw std::runtime_error(
+                        "Accessor reads outside buffer"
+                    );
+                }
+
+
+                float value;
+
+
+                std::memcpy(
+                    &value,
+                    &data[offset],
+                    sizeof(float)
+                );
+
+
+                floatVec.push_back(
+                    value
+                );
             }
         }
 
 
-        // ----------------------------------------------------
-        // Textures
-        // ----------------------------------------------------
-        
-        std::vector<Texture> textures =
-            getTextures(
-                primitive
-            );
-
-        std::cout
-            << "Textures: "
-            << textures.size()
-            << '\n';
-
-        // ----------------------------------------------------
-        // Build vertices
-        // ----------------------------------------------------
-
-        std::vector<Vertex> vertices =
-            assembleVertices(
-                positions,
-                normals,
-                texUVs,
-                boneIDs,
-                weights
-            );
-
-
-        // ----------------------------------------------------
-        // Create Mesh
-        // ----------------------------------------------------
-
-        meshes.push_back(
-            Mesh(
-                vertices,
-                indices,
-                textures,
-                instancing,
-                instanceMatrix
-            )
-        );
+        return floatVec;
     }
-}
 
 
-// ============================================================
-// Traverse node
-// ============================================================
+    // ============================================================
+    // Get JOINTS_0
+    // ============================================================
 
-void Model::traverseNode(
-    unsigned int nextNode,
-    glm::mat4 matrix
-)
-{
-    if (
-        nextNode >=
-        JSON["nodes"].size()
+    std::vector<glm::ivec4> Model::getJointIndices(
+        json accessor
     )
     {
-        std::cerr
-            << "Invalid node index: "
-            << nextNode
-            << '\n';
-
-        return;
-    }
+        std::vector<glm::ivec4> result;
 
 
-    json node =
-        JSON["nodes"][nextNode];
+        if (!accessor.contains("bufferView"))
+        {
+            throw std::runtime_error(
+                "Joint accessor has no bufferView"
+            );
+        }
 
 
-    // --------------------------------------------------------
-    // Translation
-    // --------------------------------------------------------
-
-    glm::vec3 translation(
-        0.0f
-    );
+        unsigned int bufferViewIndex =
+            accessor["bufferView"];
 
 
-    if (
-        node.contains(
-            "translation"
+        unsigned int count =
+            accessor["count"];
+
+
+        unsigned int accessorOffset =
+            accessor.value(
+                "byteOffset",
+                0
+            );
+
+
+        unsigned int componentType =
+            accessor["componentType"];
+
+
+        auto& bufferView =
+            JSON["bufferViews"]
+                [bufferViewIndex];
+
+
+        unsigned int bufferOffset =
+            bufferView.value(
+                "byteOffset",
+                0
+            );
+
+
+        // --------------------------------------------------------
+        // JOINTS_0 is usually UNSIGNED_BYTE or UNSIGNED_SHORT.
+        // --------------------------------------------------------
+
+        unsigned int componentSize;
+
+
+        if (
+            componentType == 5121
         )
-    )
-    {
-        translation =
-            glm::vec3(
-                node["translation"][0],
-                node["translation"][1],
-                node["translation"][2]
-            );
-    }
-
-
-    // --------------------------------------------------------
-    // Rotation
-    // --------------------------------------------------------
-
-    glm::quat rotation(
-        1.0f,
-        0.0f,
-        0.0f,
-        0.0f
-    );
-
-
-    if (
-        node.contains(
-            "rotation"
+        {
+            componentSize = 1;
+        }
+        else if (
+            componentType == 5123
         )
-    )
-    {
-        rotation =
-            glm::quat(
-                node["rotation"][3],
-                node["rotation"][0],
-                node["rotation"][1],
-                node["rotation"][2]
+        {
+            componentSize = 2;
+        }
+        else
+        {
+            throw std::runtime_error(
+                "Unsupported JOINTS_0 component type"
             );
-    }
+        }
 
 
-    // --------------------------------------------------------
-    // Scale
-    // --------------------------------------------------------
-
-    glm::vec3 scale(
-        1.0f
-    );
+        unsigned int elementSize =
+            componentSize * 4;
 
 
-    if (
-        node.contains(
-            "scale"
-        )
-    )
-    {
-        scale =
-            glm::vec3(
-                node["scale"][0],
-                node["scale"][1],
-                node["scale"][2]
+        unsigned int byteStride =
+            bufferView.value(
+                "byteStride",
+                elementSize
             );
-    }
 
 
-    // --------------------------------------------------------
-    // Matrix
-    // --------------------------------------------------------
-
-    glm::mat4 matNode(
-        1.0f
-    );
-
-
-    if (
-        node.contains(
-            "matrix"
-        )
-    )
-    {
-        float matValues[16];
+        unsigned int start =
+            bufferOffset +
+            accessorOffset;
 
 
         for (
             unsigned int i = 0;
-            i < 16;
+            i < count;
             i++
-        )
-        {
-            matValues[i] =
-                node["matrix"][i];
-        }
-
-
-        matNode =
-            glm::make_mat4(
-                matValues
-            );
-    }
-
-
-    // --------------------------------------------------------
-    // Transform
-    // --------------------------------------------------------
-
-    glm::mat4 trans =
-        glm::translate(
-            glm::mat4(1.0f),
-            translation
-        );
-
-
-    glm::mat4 rot =
-        glm::mat4_cast(
-            rotation
-        );
-
-
-    glm::mat4 sca =
-        glm::scale(
-            glm::mat4(1.0f),
-            scale
-        );
-
-
-    glm::mat4 matNextNode =
-        matrix *
-        matNode *
-        trans *
-        rot *
-        sca;
-
-
-    // --------------------------------------------------------
-    // Mesh
-    // --------------------------------------------------------
-
-    if (
-        node.contains(
-            "mesh"
-        )
-    )
-    {
-        translationsMeshes.push_back(
-            translation
-        );
-
-        rotationsMeshes.push_back(
-            rotation
-        );
-
-        scalesMeshes.push_back(
-            scale
-        );
-
-        matricesMeshes.push_back(
-            matNextNode
-        );
-
-
-        loadMesh(
-            node["mesh"]
-        );
-    }
-
-
-    // --------------------------------------------------------
-    // Children
-    // --------------------------------------------------------
-
-    if (
-        node.contains(
-            "children"
-        )
-    )
-    {
-        for (
-            unsigned int i = 0;
-            i < node["children"].size();
-            i++
-        )
-        {
-            traverseNode(
-                node["children"][i],
-                matNextNode
-            );
-        }
-    }
-}
-
-
-// ============================================================
-// Load binary data
-// ============================================================
-
-std::vector<unsigned char> Model::getData()
-{
-    if (
-        !JSON.contains(
-            "buffers"
-        ) ||
-        JSON["buffers"].empty()
-    )
-    {
-        throw std::runtime_error(
-            "glTF contains no buffers"
-        );
-    }
-
-
-    std::string uri =
-        JSON["buffers"][0].value(
-            "uri",
-            ""
-        );
-
-
-    if (uri.empty())
-    {
-        throw std::runtime_error(
-            "Buffer has no URI"
-        );
-    }
-
-
-    std::filesystem::path modelPath(
-        file
-    );
-
-
-    std::filesystem::path binPath =
-        modelPath.parent_path() /
-        uri;
-
-
-    std::string path =
-        binPath.lexically_normal().string();
-
-
-    std::cout
-        << "Loading binary: "
-        << path
-        << '\n';
-
-
-    std::string bytesText =
-        get_file_contents(
-            path.c_str()
-        );
-
-
-    if (bytesText.empty())
-    {
-        throw std::runtime_error(
-            "Failed to load binary buffer: " +
-            path
-        );
-    }
-
-
-    return std::vector<unsigned char>(
-        bytesText.begin(),
-        bytesText.end()
-    );
-}
-
-
-// ============================================================
-// Get FLOAT accessor
-// ============================================================
-
-std::vector<float> Model::getFloats(
-    json accessor
-)
-{
-    std::vector<float> floatVec;
-
-
-    if (!accessor.contains("bufferView"))
-    {
-        throw std::runtime_error(
-            "Accessor has no bufferView"
-        );
-    }
-
-
-    unsigned int buffViewInd =
-        accessor["bufferView"];
-
-
-    unsigned int count =
-        accessor["count"];
-
-
-    unsigned int accByteOffset =
-        accessor.value(
-            "byteOffset",
-            0
-        );
-
-
-    std::string type =
-        accessor["type"];
-
-
-    unsigned int componentType =
-        accessor["componentType"];
-
-
-    if (
-        componentType != 5126
-    )
-    {
-        throw std::runtime_error(
-            "Expected FLOAT accessor"
-        );
-    }
-
-
-    unsigned int numComponents = 0;
-
-
-    if (type == "SCALAR")
-        numComponents = 1;
-
-    else if (type == "VEC2")
-        numComponents = 2;
-
-    else if (type == "VEC3")
-        numComponents = 3;
-
-    else if (type == "VEC4")
-        numComponents = 4;
-
-    else
-        throw std::runtime_error(
-            "Unsupported accessor type: " +
-            type
-        );
-
-
-    if (
-        buffViewInd >=
-        JSON["bufferViews"].size()
-    )
-    {
-        throw std::runtime_error(
-            "Invalid bufferView index"
-        );
-    }
-
-
-    auto& bufferView =
-        JSON["bufferViews"][buffViewInd];
-
-
-    unsigned int byteOffset =
-        bufferView.value(
-            "byteOffset",
-            0
-        );
-
-
-    unsigned int elementSize =
-        sizeof(float) *
-        numComponents;
-
-
-    unsigned int byteStride =
-        bufferView.value(
-            "byteStride",
-            elementSize
-        );
-
-
-    unsigned int beginningOfData =
-        byteOffset +
-        accByteOffset;
-
-
-    for (
-        unsigned int element = 0;
-        element < count;
-        element++
-    )
-    {
-        unsigned int elementOffset =
-            beginningOfData +
-            element * byteStride;
-
-
-        for (
-            unsigned int component = 0;
-            component < numComponents;
-            component++
         )
         {
             unsigned int offset =
-                elementOffset +
-                component *
-                sizeof(float);
+                start +
+                i * byteStride;
 
 
-            if (
-                offset +
-                sizeof(float) >
-                data.size()
-            )
-            {
-                throw std::runtime_error(
-                    "Accessor reads outside buffer"
-                );
-            }
-
-
-            float value;
-
-
-            std::memcpy(
-                &value,
-                &data[offset],
-                sizeof(float)
+            glm::ivec4 joints(
+                0
             );
 
 
-            floatVec.push_back(
-                value
+            for (
+                unsigned int j = 0;
+                j < 4;
+                j++
+            )
+            {
+                unsigned int componentOffset =
+                    offset +
+                    j * componentSize;
+
+
+                if (
+                    componentOffset +
+                    componentSize >
+                    data.size()
+                )
+                {
+                    throw std::runtime_error(
+                        "JOINTS_0 reads outside buffer"
+                    );
+                }
+
+
+                if (
+                    componentType == 5121
+                )
+                {
+                    joints[j] =
+                        data[
+                            componentOffset
+                        ];
+                }
+                else
+                {
+                    unsigned short value;
+
+
+                    std::memcpy(
+                        &value,
+                        &data[
+                            componentOffset
+                        ],
+                        sizeof(
+                            unsigned short
+                        )
+                    );
+
+
+                    joints[j] =
+                        value;
+                }
+            }
+
+
+            result.push_back(
+                joints
             );
         }
+
+
+        return result;
     }
 
 
-    return floatVec;
-}
+    // ============================================================
+    // Get indices
+    // ============================================================
 
-
-// ============================================================
-// Get JOINTS_0
-// ============================================================
-
-std::vector<glm::ivec4> Model::getJointIndices(
-    json accessor
-)
-{
-    std::vector<glm::ivec4> result;
-
-
-    if (!accessor.contains("bufferView"))
-    {
-        throw std::runtime_error(
-            "Joint accessor has no bufferView"
-        );
-    }
-
-
-    unsigned int bufferViewIndex =
-        accessor["bufferView"];
-
-
-    unsigned int count =
-        accessor["count"];
-
-
-    unsigned int accessorOffset =
-        accessor.value(
-            "byteOffset",
-            0
-        );
-
-
-    unsigned int componentType =
-        accessor["componentType"];
-
-
-    auto& bufferView =
-        JSON["bufferViews"]
-             [bufferViewIndex];
-
-
-    unsigned int bufferOffset =
-        bufferView.value(
-            "byteOffset",
-            0
-        );
-
-
-    // --------------------------------------------------------
-    // JOINTS_0 is usually UNSIGNED_BYTE or UNSIGNED_SHORT.
-    // --------------------------------------------------------
-
-    unsigned int componentSize;
-
-
-    if (
-        componentType == 5121
+    std::vector<unsigned int> Model::getIndices(
+        json accessor
     )
     {
-        componentSize = 1;
-    }
-    else if (
-        componentType == 5123
-    )
-    {
-        componentSize = 2;
-    }
-    else
-    {
-        throw std::runtime_error(
-            "Unsupported JOINTS_0 component type"
-        );
-    }
+        std::vector<unsigned int> indices;
 
 
-    unsigned int elementSize =
-        componentSize * 4;
+        if (!accessor.contains("bufferView"))
+        {
+            throw std::runtime_error(
+                "Index accessor has no bufferView"
+            );
+        }
 
 
-    unsigned int byteStride =
-        bufferView.value(
-            "byteStride",
-            elementSize
-        );
+        unsigned int buffViewInd =
+            accessor["bufferView"];
 
 
-    unsigned int start =
-        bufferOffset +
-        accessorOffset;
+        unsigned int count =
+            accessor["count"];
 
 
-    for (
-        unsigned int i = 0;
-        i < count;
-        i++
-    )
-    {
-        unsigned int offset =
-            start +
-            i * byteStride;
+        unsigned int accByteOffset =
+            accessor.value(
+                "byteOffset",
+                0
+            );
 
 
-        glm::ivec4 joints(
-            0
-        );
+        unsigned int componentType =
+            accessor["componentType"];
 
 
-        for (
-            unsigned int j = 0;
-            j < 4;
-            j++
+        auto& bufferView =
+            JSON["bufferViews"][buffViewInd];
+
+
+        unsigned int byteOffset =
+            bufferView.value(
+                "byteOffset",
+                0
+            );
+
+
+        unsigned int beginningOfData =
+            byteOffset +
+            accByteOffset;
+
+
+        // --------------------------------------------------------
+        // UNSIGNED BYTE
+        // --------------------------------------------------------
+
+        if (
+            componentType == 5121
         )
         {
-            unsigned int componentOffset =
-                offset +
-                j * componentSize;
-
-
-            if (
-                componentOffset +
-                componentSize >
-                data.size()
+            for (
+                unsigned int i = 0;
+                i < count;
+                i++
             )
             {
-                throw std::runtime_error(
-                    "JOINTS_0 reads outside buffer"
+                unsigned int offset =
+                    beginningOfData +
+                    i;
+
+
+                if (
+                    offset >= data.size()
+                )
+                {
+                    throw std::runtime_error(
+                        "Index accessor out of bounds"
+                    );
+                }
+
+
+                indices.push_back(
+                    static_cast<unsigned int>(
+                        data[offset]
+                    )
                 );
             }
+        }
 
 
-            if (
-                componentType == 5121
+        // --------------------------------------------------------
+        // UNSIGNED SHORT
+        // --------------------------------------------------------
+
+        else if (
+            componentType == 5123
+        )
+        {
+            for (
+                unsigned int i = 0;
+                i < count;
+                i++
             )
             {
-                joints[j] =
-                    data[
-                        componentOffset
-                    ];
-            }
-            else
-            {
+                unsigned int offset =
+                    beginningOfData +
+                    i * 2;
+
+
+                if (
+                    offset + 2 >
+                    data.size()
+                )
+                {
+                    throw std::runtime_error(
+                        "Index accessor out of bounds"
+                    );
+                }
+
+
                 unsigned short value;
 
 
                 std::memcpy(
                     &value,
-                    &data[
-                        componentOffset
-                    ],
+                    &data[offset],
                     sizeof(
                         unsigned short
                     )
                 );
 
 
-                joints[j] =
-                    value;
-            }
-        }
-
-
-        result.push_back(
-            joints
-        );
-    }
-
-
-    return result;
-}
-
-
-// ============================================================
-// Get indices
-// ============================================================
-
-std::vector<GLuint> Model::getIndices(
-    json accessor
-)
-{
-    std::vector<GLuint> indices;
-
-
-    if (!accessor.contains("bufferView"))
-    {
-        throw std::runtime_error(
-            "Index accessor has no bufferView"
-        );
-    }
-
-
-    unsigned int buffViewInd =
-        accessor["bufferView"];
-
-
-    unsigned int count =
-        accessor["count"];
-
-
-    unsigned int accByteOffset =
-        accessor.value(
-            "byteOffset",
-            0
-        );
-
-
-    unsigned int componentType =
-        accessor["componentType"];
-
-
-    auto& bufferView =
-        JSON["bufferViews"][buffViewInd];
-
-
-    unsigned int byteOffset =
-        bufferView.value(
-            "byteOffset",
-            0
-        );
-
-
-    unsigned int beginningOfData =
-        byteOffset +
-        accByteOffset;
-
-
-    // --------------------------------------------------------
-    // UNSIGNED BYTE
-    // --------------------------------------------------------
-
-    if (
-        componentType == 5121
-    )
-    {
-        for (
-            unsigned int i = 0;
-            i < count;
-            i++
-        )
-        {
-            unsigned int offset =
-                beginningOfData +
-                i;
-
-
-            if (
-                offset >= data.size()
-            )
-            {
-                throw std::runtime_error(
-                    "Index accessor out of bounds"
+                indices.push_back(
+                    static_cast<unsigned int>(
+                        value
+                    )
                 );
             }
-
-
-            indices.push_back(
-                static_cast<GLuint>(
-                    data[offset]
-                )
-            );
         }
-    }
 
 
-    // --------------------------------------------------------
-    // UNSIGNED SHORT
-    // --------------------------------------------------------
+        // --------------------------------------------------------
+        // UNSIGNED INT
+        // --------------------------------------------------------
 
-    else if (
-        componentType == 5123
-    )
-    {
-        for (
-            unsigned int i = 0;
-            i < count;
-            i++
+        else if (
+            componentType == 5125
         )
         {
-            unsigned int offset =
-                beginningOfData +
-                i * 2;
-
-
-            if (
-                offset + 2 >
-                data.size()
+            for (
+                unsigned int i = 0;
+                i < count;
+                i++
             )
             {
-                throw std::runtime_error(
-                    "Index accessor out of bounds"
+                unsigned int offset =
+                    beginningOfData +
+                    i * 4;
+
+
+                if (
+                    offset + 4 >
+                    data.size()
+                )
+                {
+                    throw std::runtime_error(
+                        "Index accessor out of bounds"
+                    );
+                }
+
+
+                unsigned int value;
+
+
+                std::memcpy(
+                    &value,
+                    &data[offset],
+                    sizeof(
+                        unsigned int
+                    )
+                );
+
+
+                indices.push_back(
+                    static_cast<unsigned int>(
+                        value
+                    )
                 );
             }
-
-
-            unsigned short value;
-
-
-            std::memcpy(
-                &value,
-                &data[offset],
-                sizeof(
-                    unsigned short
-                )
-            );
-
-
-            indices.push_back(
-                static_cast<GLuint>(
-                    value
-                )
-            );
         }
-    }
 
-
-    // --------------------------------------------------------
-    // UNSIGNED INT
-    // --------------------------------------------------------
-
-    else if (
-        componentType == 5125
-    )
-    {
-        for (
-            unsigned int i = 0;
-            i < count;
-            i++
-        )
+        else
         {
-            unsigned int offset =
-                beginningOfData +
-                i * 4;
-
-
-            if (
-                offset + 4 >
-                data.size()
-            )
-            {
-                throw std::runtime_error(
-                    "Index accessor out of bounds"
-                );
-            }
-
-
-            unsigned int value;
-
-
-            std::memcpy(
-                &value,
-                &data[offset],
-                sizeof(
-                    unsigned int
-                )
-            );
-
-
-            indices.push_back(
-                static_cast<GLuint>(
-                    value
+            throw std::runtime_error(
+                "Unsupported index component type: " +
+                std::to_string(
+                    componentType
                 )
             );
         }
-    }
 
-    else
-    {
-        throw std::runtime_error(
-            "Unsupported index component type: " +
-            std::to_string(
-                componentType
-            )
-        );
+
+        return indices;
     }
 
 
-    return indices;
-}
+    // ============================================================
+    // Get texture from glTF material
+    // ============================================================
 
-
-// ============================================================
-// Get texture from glTF material
-// ============================================================
-
-std::vector<Texture> Model::getTextures(
-    const json& primitive
-)
-{
-    std::vector<Texture> textures;
-
-
-    if (
-        !primitive.contains(
-            "material"
-        )
+    std::vector<Texture> Model::getTextures(
+        const json& primitive
     )
     {
-        return textures;
-    }
+        std::vector<Texture> textures;
 
 
-    unsigned int materialIndex =
-        primitive["material"];
-
-
-    if (
-        !JSON.contains(
-            "materials"
-        ) ||
-        materialIndex >=
-        JSON["materials"].size()
-    )
-    {
-        return textures;
-    }
-
-
-    auto& material =
-        JSON["materials"]
-             [materialIndex];
-
-
-    if (
-        !material.contains(
-            "pbrMetallicRoughness"
-        )
-    )
-    {
-        return textures;
-    }
-
-
-    auto& pbr =
-        material[
-            "pbrMetallicRoughness"
-        ];
-
-
-    if (
-        !pbr.contains(
-            "baseColorTexture"
-        )
-    )
-    {
-        return textures;
-    }
-
-
-    unsigned int textureIndex =
-        pbr[
-            "baseColorTexture"
-        ][
-            "index"
-        ];
-
-
-    if (
-        !JSON.contains(
-            "textures"
-        ) ||
-        textureIndex >=
-        JSON["textures"].size()
-    )
-    {
-        return textures;
-    }
-
-
-    auto& textureJSON =
-        JSON["textures"]
-             [textureIndex];
-
-
-    if (
-        !textureJSON.contains(
-            "source"
-        )
-    )
-    {
-        return textures;
-    }
-
-
-    unsigned int imageIndex =
-        textureJSON["source"];
-
-
-    if (
-        !JSON.contains(
-            "images"
-        ) ||
-        imageIndex >=
-        JSON["images"].size()
-    )
-    {
-        return textures;
-    }
-
-
-    auto& image =
-        JSON["images"]
-             [imageIndex];
-
-
-    if (
-        !image.contains(
-            "uri"
-        )
-    )
-    {
-        return textures;
-    }
-
-
-    std::string texPath =
-        image["uri"];
-
-
-    // --------------------------------------------------------
-    // Check texture cache
-    // --------------------------------------------------------
-
-    for (
-        unsigned int i = 0;
-        i < loadedTexName.size();
-        i++
-    )
-    {
         if (
-            loadedTexName[i] ==
-            texPath
+            !primitive.contains(
+                "material"
+            )
         )
         {
-            textures.push_back(
-                loadedTex[i]
-            );
-
             return textures;
         }
-    }
 
 
-    // --------------------------------------------------------
-    // Build path
-    // --------------------------------------------------------
-
-    std::filesystem::path modelPath(
-        file
-    );
+        unsigned int materialIndex =
+            primitive["material"];
 
 
-    std::filesystem::path texturePath =
-        modelPath.parent_path() /
-        texPath;
+        if (
+            !JSON.contains(
+                "materials"
+            ) ||
+            materialIndex >=
+            JSON["materials"].size()
+        )
+        {
+            return textures;
+        }
 
 
-    std::string fullPath =
-        texturePath.lexically_normal().string();
+        auto& material =
+            JSON["materials"]
+                [materialIndex];
 
 
-    // --------------------------------------------------------
-    // Load
-    // --------------------------------------------------------
-
-    std::cout
-    << "Loading texture: "
-    << fullPath
-    << std::endl;
-
-    Texture diffuse(
-        fullPath.c_str(),
-        "diffuse",
-        loadedTex.size()
-    );
+        if (
+            !material.contains(
+                "pbrMetallicRoughness"
+            )
+        )
+        {
+            return textures;
+        }
 
 
-    textures.push_back(
-        diffuse
-    );
+        auto& pbr =
+            material[
+                "pbrMetallicRoughness"
+            ];
 
 
-    loadedTex.push_back(
-        diffuse
-    );
+        if (
+            !pbr.contains(
+                "baseColorTexture"
+            )
+        )
+        {
+            return textures;
+        }
 
 
-    loadedTexName.push_back(
-        texPath
-    );
+        unsigned int textureIndex =
+            pbr[
+                "baseColorTexture"
+            ][
+                "index"
+            ];
 
 
-    return textures;
-}
+        if (
+            !JSON.contains(
+                "textures"
+            ) ||
+            textureIndex >=
+            JSON["textures"].size()
+        )
+        {
+            return textures;
+        }
 
 
-// ============================================================
-// Assemble vertices
-// ============================================================
-
-std::vector<Vertex> Model::assembleVertices(
-    const std::vector<glm::vec3> positions,
-    const std::vector<glm::vec3> normals,
-    const std::vector<glm::vec2> texUVs,
-    const std::vector<glm::ivec4> boneIDs,
-    const std::vector<glm::vec4> weights
-)
-{
-    std::vector<Vertex> vertices;
+        auto& textureJSON =
+            JSON["textures"]
+                [textureIndex];
 
 
-    vertices.reserve(
-        positions.size()
-    );
+        if (
+            !textureJSON.contains(
+                "source"
+            )
+        )
+        {
+            return textures;
+        }
 
 
-    for (
-        size_t i = 0;
-        i < positions.size();
-        i++
-    )
-    {
-        glm::vec3 normal =
-            i < normals.size()
-                ? normals[i]
-                : glm::vec3(
-                    0.0f,
-                    1.0f,
-                    0.0f
-                );
+        unsigned int imageIndex =
+            textureJSON["source"];
 
 
-        glm::vec2 uv =
-            i < texUVs.size()
-                ? texUVs[i]
-                : glm::vec2(
-                    0.0f
-                );
+        if (
+            !JSON.contains(
+                "images"
+            ) ||
+            imageIndex >=
+            JSON["images"].size()
+        )
+        {
+            return textures;
+        }
 
 
-        glm::ivec4 joints =
-            i < boneIDs.size()
-                ? boneIDs[i]
-                : glm::ivec4(
-                    0
-                );
+        auto& image =
+            JSON["images"]
+                [imageIndex];
 
 
-        glm::vec4 weight =
-            i < weights.size()
-                ? weights[i]
-                : glm::vec4(
-                    0.0f
-                );
+        if (
+            !image.contains(
+                "uri"
+            )
+        )
+        {
+            return textures;
+        }
 
 
-        vertices.push_back(
-            Vertex
+        std::string texPath =
+            image["uri"];
+
+
+        // --------------------------------------------------------
+        // Check texture cache
+        // --------------------------------------------------------
+
+        for (
+            unsigned int i = 0;
+            i < loadedTexName.size();
+            i++
+        )
+        {
+            if (
+                loadedTexName[i] ==
+                texPath
+            )
             {
-                positions[i],
-                normal,
-                glm::vec3(
-                    1.0f
-                ),
-                uv,
-                joints,
-                weight
+                textures.push_back(
+                    loadedTex[i]
+                );
+
+                return textures;
             }
+        }
+
+
+        // --------------------------------------------------------
+        // Build path
+        // --------------------------------------------------------
+
+        std::filesystem::path modelPath(
+            file
         );
+
+
+        std::filesystem::path texturePath =
+            modelPath.parent_path() /
+            texPath;
+
+
+        std::string fullPath =
+            texturePath.lexically_normal().string();
+
+
+        // --------------------------------------------------------
+        // Load
+        // --------------------------------------------------------
+
+        std::cout
+        << "Loading texture: "
+        << fullPath
+        << std::endl;
+
+        Texture diffuse(
+            fullPath.c_str(),
+            "diffuse",
+            loadedTex.size()
+        );
+
+
+        textures.push_back(
+            diffuse
+        );
+
+
+        loadedTex.push_back(
+            diffuse
+        );
+
+
+        loadedTexName.push_back(
+            texPath
+        );
+
+
+        return textures;
     }
 
 
-    return vertices;
-}
+    // ============================================================
+    // Assemble vertices
+    // ============================================================
 
-
-// ============================================================
-// Vec2
-// ============================================================
-
-std::vector<glm::vec2> Model::groupFloatsVec2(
-    std::vector<float> floatVec
-)
-{
-    std::vector<glm::vec2> vectors;
-
-
-    for (
-        unsigned int i = 0;
-        i + 1 < floatVec.size();
-        i += 2
+    std::vector<Vertex> Model::assembleVertices(
+        const std::vector<glm::vec3> positions,
+        const std::vector<glm::vec3> normals,
+        const std::vector<glm::vec2> texUVs,
+        const std::vector<glm::ivec4> boneIDs,
+        const std::vector<glm::vec4> weights
     )
     {
-        vectors.push_back(
-            glm::vec2(
-                floatVec[i],
-                floatVec[i + 1]
-            )
+        std::vector<Vertex> vertices;
+
+
+        vertices.reserve(
+            positions.size()
         );
+
+
+        for (
+            size_t i = 0;
+            i < positions.size();
+            i++
+        )
+        {
+            glm::vec3 normal =
+                i < normals.size()
+                    ? normals[i]
+                    : glm::vec3(
+                        0.0f,
+                        1.0f,
+                        0.0f
+                    );
+
+
+            glm::vec2 uv =
+                i < texUVs.size()
+                    ? texUVs[i]
+                    : glm::vec2(
+                        0.0f
+                    );
+
+
+            glm::ivec4 joints =
+                i < boneIDs.size()
+                    ? boneIDs[i]
+                    : glm::ivec4(
+                        0
+                    );
+
+
+            glm::vec4 weight =
+                i < weights.size()
+                    ? weights[i]
+                    : glm::vec4(
+                        0.0f
+                    );
+
+
+            vertices.push_back(
+                Vertex
+                {
+                    positions[i],
+                    normal,
+                    glm::vec3(
+                        1.0f
+                    ),
+                    uv,
+                    joints,
+                    weight
+                }
+            );
+        }
+
+
+        return vertices;
     }
 
 
-    return vectors;
-}
+    // ============================================================
+    // Vec2
+    // ============================================================
 
-
-// ============================================================
-// Vec3
-// ============================================================
-
-std::vector<glm::vec3> Model::groupFloatsVec3(
-    std::vector<float> floatVec
-)
-{
-    std::vector<glm::vec3> vectors;
-
-
-    for (
-        unsigned int i = 0;
-        i + 2 < floatVec.size();
-        i += 3
+    std::vector<glm::vec2> Model::groupFloatsVec2(
+        std::vector<float> floatVec
     )
     {
-        vectors.push_back(
-            glm::vec3(
-                floatVec[i],
-                floatVec[i + 1],
-                floatVec[i + 2]
-            )
-        );
+        std::vector<glm::vec2> vectors;
+
+
+        for (
+            unsigned int i = 0;
+            i + 1 < floatVec.size();
+            i += 2
+        )
+        {
+            vectors.push_back(
+                glm::vec2(
+                    floatVec[i],
+                    floatVec[i + 1]
+                )
+            );
+        }
+
+
+        return vectors;
     }
 
 
-    return vectors;
-}
+    // ============================================================
+    // Vec3
+    // ============================================================
 
-
-// ============================================================
-// Vec4
-// ============================================================
-
-std::vector<glm::vec4> Model::groupFloatsVec4(
-    std::vector<float> floatVec
-)
-{
-    std::vector<glm::vec4> vectors;
-
-
-    for (
-        unsigned int i = 0;
-        i + 3 < floatVec.size();
-        i += 4
+    std::vector<glm::vec3> Model::groupFloatsVec3(
+        std::vector<float> floatVec
     )
     {
-        vectors.push_back(
-            glm::vec4(
-                floatVec[i],
-                floatVec[i + 1],
-                floatVec[i + 2],
-                floatVec[i + 3]
-            )
-        );
+        std::vector<glm::vec3> vectors;
+
+
+        for (
+            unsigned int i = 0;
+            i + 2 < floatVec.size();
+            i += 3
+        )
+        {
+            vectors.push_back(
+                glm::vec3(
+                    floatVec[i],
+                    floatVec[i + 1],
+                    floatVec[i + 2]
+                )
+            );
+        }
+
+
+        return vectors;
     }
 
 
-    return vectors;
-}
+    // ============================================================
+    // Vec4
+    // ============================================================
 
+    std::vector<glm::vec4> Model::groupFloatsVec4(
+        std::vector<float> floatVec
+    )
+    {
+        std::vector<glm::vec4> vectors;
+
+
+        for (
+            unsigned int i = 0;
+            i + 3 < floatVec.size();
+            i += 4
+        )
+        {
+            vectors.push_back(
+                glm::vec4(
+                    floatVec[i],
+                    floatVec[i + 1],
+                    floatVec[i + 2],
+                    floatVec[i + 3]
+                )
+            );
+        }
+
+
+        return vectors;
+    }
+}
 
 // std::vector<Model*> Model::modelCache;
 
@@ -2080,7 +2082,7 @@ std::vector<glm::vec4> Model::groupFloatsVec4(
 
 // // 	// Combine all the vertex components and also get the indices and textures
 // // 	std::vector<Vertex> vertices = assembleVertices(positions, normals, texUVs);
-// // 	std::vector<GLuint> indices = getIndices(JSON["accessors"][indAccInd]);
+// // 	std::vector<unsigned int> indices = getIndices(JSON["accessors"][indAccInd]);
 // // 	std::vector<Texture> textures = getTextures();
 
 // // 	// std::cout << "Loading mesh " << indMesh << '\n';
@@ -2346,7 +2348,7 @@ std::vector<glm::vec4> Model::groupFloatsVec4(
 //         // Indices
 //         // ----------------------------------------------------
 
-//         std::vector<GLuint> indices;
+//         std::vector<unsigned int> indices;
 
 
 //         if (
@@ -2586,9 +2588,9 @@ std::vector<glm::vec4> Model::groupFloatsVec4(
 // 	return floatVec;
 // }
 
-// std::vector<GLuint> Model::getIndices(json accessor)
+// std::vector<unsigned int> Model::getIndices(json accessor)
 // {
-// 	std::vector<GLuint> indices;
+// 	std::vector<unsigned int> indices;
 
 // 	// Get properties from the accessor
 // 	unsigned int buffViewInd = accessor.value("bufferView", 0);
@@ -2609,7 +2611,7 @@ std::vector<glm::vec4> Model::groupFloatsVec4(
 // 			unsigned char bytes[] = { data[i], data[i + 1], data[i + 2], data[i + 3] };
 // 			unsigned int value;
 // 			std::memcpy(&value, bytes, sizeof(unsigned int));
-// 			indices.push_back((GLuint)value);
+// 			indices.push_back((unsigned int)value);
 // 		}
 // 	}
 // 	else if (componentType == 5123)
@@ -2619,7 +2621,7 @@ std::vector<glm::vec4> Model::groupFloatsVec4(
 // 			unsigned char bytes[] = { data[i], data[i + 1] };
 // 			unsigned short value;
 // 			std::memcpy(&value, bytes, sizeof(unsigned short));
-// 			indices.push_back((GLuint)value);
+// 			indices.push_back((unsigned int)value);
 // 		}
 // 	}
 // 	else if (componentType == 5122)
@@ -2629,7 +2631,7 @@ std::vector<glm::vec4> Model::groupFloatsVec4(
 // 			unsigned char bytes[] = { data[i], data[i + 1] };
 // 			short value;
 // 			std::memcpy(&value, bytes, sizeof(short));
-// 			indices.push_back((GLuint)value);
+// 			indices.push_back((unsigned int)value);
 // 		}
 // 	}
 

@@ -491,7 +491,7 @@ static Vertex MapVertexToVertex(
             vertices.push_back(vertex);
         }
 
-        std::vector<GLuint> indices;
+        std::vector<unsigned int> indices;
 
         for (unsigned int index : surface.indices)
         {
@@ -509,7 +509,7 @@ static Vertex MapVertexToVertex(
         );
     }
 
-    std::vector<GLuint> indices;
+    std::vector<unsigned int> indices;
 
     // indices.reserve(
     //     data.indices.size()
@@ -771,7 +771,7 @@ bool Map::BuildMeshes()
         // 0 2 3
         // ----------------------------------------------------
 
-        std::vector<GLuint> indices;
+        std::vector<unsigned int> indices;
 
         for (size_t i = 1;
              i + 1 < surfaceVertices.size();
@@ -780,11 +780,11 @@ bool Map::BuildMeshes()
             indices.push_back(0);
 
             indices.push_back(
-                static_cast<GLuint>(i)
+                static_cast<unsigned int>(i)
             );
 
             indices.push_back(
-                static_cast<GLuint>(i + 1)
+                static_cast<unsigned int>(i + 1)
             );
         }
 
@@ -1081,7 +1081,7 @@ bool Map::Load(const std::string& filename)
 
 void Map::Draw(
     MapHandle map,
-    Shader& shader,
+    TE::Shader& shader,
     Camera& camera
 )
 {

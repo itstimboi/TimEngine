@@ -5,32 +5,37 @@
 #include "Camera/Camera.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 
-class Sprite
+namespace TE
 {
-public:
+    class Sprite
+    {
+    public:
 
-    Sprite(
-        const char* texturePath
-    );
+        Sprite(
+            const char* texturePath
+        );
 
-    ~Sprite();
+        ~Sprite();
 
-    void Draw(
-        glm::vec3 position,
-        glm::vec3 scale,
-        float rotation,
-        Shader& shader, 
-        Camera& camera
-    );
+        void Draw(
+            glm::vec3 position,
+            glm::vec3 scale,
+            glm::quat rotation,
+            TE::Shader& shader, 
+            Camera& camera
+        );
 
-private:
+    private:
 
-    Texture texture;
+        Texture texture;
 
-    glm::vec2 size;
+        glm::vec2 size;
 
-    unsigned int VAO;
-    unsigned int VBO;
-    unsigned int EBO;
+        unsigned int VAO;
+        unsigned int VBO;
+        unsigned int EBO;
+    };
 };

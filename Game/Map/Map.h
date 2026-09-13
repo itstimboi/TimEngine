@@ -28,7 +28,7 @@ public:
 
     static void Draw(
         MapHandle map,
-        Shader& shader,
+        TE::Shader& shader,
         Camera& camera
     );
 

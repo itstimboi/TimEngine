@@ -8,63 +8,68 @@
 #include "Mesh/Mesh.h"
 #include "MapFormat.h"
 
-using MapHandle = unsigned int;
-
-// ------------------------------------------------------------
-// Map
-// ------------------------------------------------------------
-
-class Map
+namespace GAME
 {
-public:
 
-    static bool Init();
+	using MapHandle = unsigned int;
 
-    static void Shutdown();
+	// ------------------------------------------------------------
+	// Map
+	// ------------------------------------------------------------
 
-    static MapHandle Pre_CacheMap(
-        const std::string& path
-    );
+	class Map
+	{
+	public:
 
-    static void Draw(
-        MapHandle map,
-        Shader& shader,
-        Camera& camera
-    );
+		static bool Init();
 
+		static void Shutdown();
 
-    Map(
-        const char* file
-    );
+		static MapHandle Pre_CacheMap(
+			const std::string& path
+		);
 
-
-    bool Load(
-        const std::string& filename
-    );
-
-
-    void New(
-        const std::string& name
-    );
-
-    
-
-    MapData& GetData();
-
-    const MapData& GetData() const;
+		static void Draw(
+			MapHandle map,
+			TE::Shader& shader,
+			TE::Camera& camera
+		);
 
 
-private:
-
-    bool BuildMeshes();
-
-
-    std::string file;
-
-    MapData data;
-
-    std::vector<Mesh> meshes;
+		Map(
+			const char* file
+		);
 
 
-    static std::vector<Map*> mapCache;
+		bool Load(
+			const std::string& filename
+		);
+
+
+		void New(
+			const std::string& name
+		);
+
+		
+
+		MapData& GetData();
+
+		const MapData& GetData() const;
+
+
+	private:
+
+		bool BuildMeshes();
+
+
+		std::string file;
+
+		MapData data;
+
+		std::vector<TE::Mesh> meshes;
+
+
+		static std::vector<Map*> mapCache;
+	};
+
 };

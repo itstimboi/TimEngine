@@ -1,30 +1,59 @@
-#include "VBO.h"
+#include "VAO.h"
 
-VBO::VBO(std::vector <Vertex>& vertices)
+VAO::VAO()
 {
-    glGenBuffers(1, &ID);
-    glBindBuffer(GL_ARRAY_BUFFER, ID);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
+    glGenVertexArrays(1, &ID);
 }
 
-VBO::VBO(std::vector <glm::mat4>& mat4s)
+VAO::~VAO()
 {
-    glGenBuffers(1, &ID);
-    glBindBuffer(GL_ARRAY_BUFFER, ID);
-    glBufferData(GL_ARRAY_BUFFER, mat4s.size() * sizeof(mat4s), mat4s.data(), GL_STATIC_DRAW);
+    Delete();
 }
 
-void VBO::Bind()
+void VAO::LinkAttrib(
+    VBO& vbo,
+    unsigned int layout,
+    unsigned int numComponents,
+    GLenum type,
+    GLsizeiptr stride,
+    void* offset
+)
 {
-    glBindBuffer(GL_ARRAY_BUFFER, ID);
+    Bind();
+
+    vbo.Bind();
+
+    glVertexAttribPointer(
+        layout,
+        numComponents,
+        type,
+        GL_FALSE,
+        stride,
+        offset
+    );
+
+    glEnableVertexAttribArray(layout);
+
+    vbo.Unbind();
+
+    Unbind();
 }
 
-void VBO::Unbind()
+void VAO::Bind()
 {
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(ID);
 }
 
-void VBO::Delete()
+void VAO::Unbind()
 {
-    glDeleteBuffers(1, &ID);
+    glBindVertexArray(0);
+}
+
+void VAO::Delete()
+{
+    if (ID != 0)
+    {
+        glDeleteVertexArrays(1, &ID);
+        ID = 0;
+    }
 }

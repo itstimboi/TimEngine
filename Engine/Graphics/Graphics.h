@@ -1,4 +1,4 @@
-// #pragma once
+/*// #pragma once
 
 // enum class Renderer
 // {
@@ -97,123 +97,261 @@
 
 // void SwapGraphicsBuffers();
 // bool GraphicsShouldClose();
-// void PollGraphicsEvents();
+// void PollGraphicsEvents();*/
 
 #pragma once
 
-enum class Renderer
+namespace TE
 {
-    GL,
-    DX,
-    VK,
-    Software,
-    None
+
+    // ============================================================
+    // Graphics Window
+    // ============================================================
+
+    struct GraphicsWindow;
+
+    enum class Renderer
+    {
+        GL,
+        DX,
+        VK,
+        Software,
+        None
+    };
+
+    enum class GLRenderer
+    {
+        gl46,
+        gl45,
+        gl44,
+        gl43,
+        gl42,
+        gl41,
+        gl40,
+
+        gl33,
+        gl32,
+        gl31,
+        gl30,
+
+        gl21,
+        gl20,
+
+        gl15,
+        gl14,
+        gl13,
+        gl12,
+        gl11,
+        gl10,
+
+        None
+    };
+
+    enum class DXRenderer
+    {
+        dx120,
+
+        dx110,
+
+        dx100,
+
+        dx90c,
+        dx90b,
+        dx90a,
+        dx90,
+
+        dx81b,
+        dx81,
+        dx80,
+
+        dx70a,
+        dx70,
+
+        dx61,
+        dx60,
+
+        dx52a,
+        dx52,
+        dx51,
+        dx50,
+
+        dx30a,
+        dx30,
+
+        dx20,
+
+        dx10,
+
+        None
+    };
+
+    enum class VKRenderer
+    {
+        vk14,
+        vk13,
+
+        None
+    };
+
+
+    struct GraphicsRenderer
+    {
+        Renderer API = Renderer::None;
+
+        GLRenderer GL = GLRenderer::None;
+        DXRenderer DX = DXRenderer::None;
+        VKRenderer VK = VKRenderer::None;
+    };
+
+
+    // ============================================================
+    // Graphics Window
+    // ============================================================
+
+    // The actual contents are private to Graphics.cpp.
+    struct GraphicsWindow;
+
+
+    // ============================================================
+    // Legacy OpenGL
+    // ============================================================
+
+    bool IsUsingLegacyOpenGL();
+
+
+    // ============================================================
+    // Detection
+    // ============================================================
+
+    GLRenderer bestGLVersion();
+
+    GraphicsRenderer DetectBestRenderer();
+
+
+    // ============================================================
+    // Window creation
+    // ============================================================
+
+    GraphicsWindow* CreateGraphicsWindow(
+        int width,
+        int height,
+        const char* title
+    );
+
+    GraphicsWindow* CreateGraphicsWindow(
+        int width,
+        int height,
+        const char* title,
+        GraphicsRenderer renderer
+    );
+
+
+    // ============================================================
+    // Window destruction
+    // ============================================================
+
+    void DestroyGraphicsWindow(
+        GraphicsWindow* window
+    );
+
+
+    // ============================================================
+    // Renderer switching
+    // ============================================================
+
+    bool SwitchRenderer(
+        GraphicsWindow* window,
+        GraphicsRenderer renderer
+    );
+
+
+    // ============================================================
+    // Current window/context
+    // ============================================================
+
+    void GraphicsMakeCurrent(
+        GraphicsWindow* window
+    );
+
+
+    // ============================================================
+    // Window information
+    // ============================================================
+
+    int GraphicsGetWidth(
+        GraphicsWindow* window
+    );
+
+    int GraphicsGetHeight(
+        GraphicsWindow* window
+    );
+
+
+    // ============================================================
+    // Renderer information
+    // ============================================================
+
+    GraphicsRenderer GetGraphicsRenderer(
+        GraphicsWindow* window
+    );
+
+    Renderer GetRenderer(
+        GraphicsWindow* window
+    );
+
+    GLRenderer GetGLRenderer(
+        GraphicsWindow* window
+    );
+
+    DXRenderer GetDXRenderer(
+        GraphicsWindow* window
+    );
+
+    VKRenderer GetVKRenderer(
+        GraphicsWindow* window
+    );
+
+
+    // ============================================================
+    // Renderer names
+    // ============================================================
+
+    const char* RendererName(
+        Renderer renderer
+    );
+
+    const char* GLRendererName(
+        GLRenderer renderer
+    );
+
+    const char* DXRendererName(
+        DXRenderer renderer
+    );
+
+    const char* VKRendererName(
+        VKRenderer renderer
+    );
+
+
+    // ============================================================
+    // Window operations
+    // ============================================================
+
+    void GraphicsSwapBuffers(
+        GraphicsWindow* window
+    );
+
+    bool GraphicsWindowShouldClose(
+        GraphicsWindow* window
+    );
+
+    void GraphicsPollEvents();
+
+
+    // ============================================================
+    // Global graphics shutdown
+    // ============================================================
+
+    void DeInitGraphics();
+
 };
-
-enum class GLRenderer
-{
-    gl46,
-    gl45,
-    gl44,
-    gl43,
-    gl42,
-    gl41,
-    gl40,
-
-    gl33,
-    gl32,
-    gl31,
-    gl30,
-
-    gl21,
-    gl20,
-
-    gl15,
-    gl14,
-    gl13,
-    gl12,
-    gl11,
-    gl10,
-
-    None
-};
-
-enum class DXRenderer
-{
-    dx120,
-
-    dx110,
-
-    dx100,
-
-    dx90c,
-    dx90b,
-    dx90a,
-    dx90,
-
-    dx81b,
-    dx81,
-    dx80,
-
-    dx70a,
-    dx70,
-
-    dx61,
-    dx60,
-
-    dx52a,
-    dx52,
-    dx51,
-    dx50,
-
-    dx30a,
-    dx30,
-
-    dx20,
-
-    dx10,
-
-    None
-};
-
-enum class VKRenderer
-{
-    vk14,
-    vk13,
-
-    None
-};
-
-
-// True when the selected OpenGL renderer is using
-// the old OpenGL 1.x-style API.
-bool IsUsingLegacyOpenGL();
-
-static bool isUsingGL1 = false;
-
-// Detection
-GLRenderer bestGLVersion();
-
-
-// Graphics
-bool InitGraphics(
-    int width,
-    int height,
-    const char* title
-);
-
-void DeInitGraphics();
-
-
-// Information
-Renderer GetRenderer();
-
-GLRenderer GetGLRenderer();
-DXRenderer GetDXRenderer();
-VKRenderer GetVKRenderer();
-
-
-// Window
-void SwapGraphicsBuffers();
-bool GraphicsShouldClose();
-void PollGraphicsEvents();

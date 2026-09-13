@@ -1,5 +1,7 @@
 #pragma once
 
+#if _WIN32
+
 #include <string>
 
 #define MESBOX_OK int(0)
@@ -8,3 +10,5 @@
 #define MESBOX_WARNINGICON int(1)
 
 bool CreateMessageBox(std::string info, std::string title, int flags, int icon);
+
+#endif
